@@ -72,10 +72,6 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-pub fn shortcut_label(app: &AppHandle) -> String {
-    label(&load(app))
-}
-
 #[tauri::command]
 pub fn hotkey_snapshot(app: AppHandle) -> HotkeyView {
     view(&load(&app))
