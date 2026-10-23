@@ -1,0 +1,58 @@
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12161c;
+  --text: #f4f1ea;
+  --muted: #c5bfb4;
+  --border: #3a4250;
+  --surface: #1c222b;
+  --note: #f0c36a;
+  --ok: #8fbf9f;
+  --accent: #e2580c;
+  --button: #e2580c;
+  --button-text: #fff8f3;
+  --knob: #f4f1ea;
+  --knob-on: #f4f1ea;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f3ec;
+  --text: #161410;
+  --muted: #5e584e;
+  --border: #ddd6c8;
+  --surface: #fffcf7;
+  --note: #8a5a10;
+  --ok: #2f7d4a;
+  --accent: #c2410c;
+  --button: #c2410c;
+  --button-text: #fff8f3;
+  --knob: #161410;
+  --knob-on: #f6f3ec;
+}
+
+html,
+body,
+#app {
+  background: var(--bg);
+  color: var(--text);
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted) 68%, transparent);
+}
