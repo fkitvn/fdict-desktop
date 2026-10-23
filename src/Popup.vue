@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
         type="button"
         class="logo"
         data-tauri-drag-region="false"
-        aria-label="Mở Fdict"
+        aria-label="Mở FDict"
         @click.stop="openApp"
       >
         <img src="/logo-full.svg" alt="" />

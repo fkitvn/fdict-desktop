@@ -10,7 +10,7 @@ const HEIGHT: f64 = 480.0;
 
 pub fn install(app: &tauri::App) -> tauri::Result<()> {
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html?popup=1".into()))
-        .title("Fdict")
+        .title("FDict")
         .inner_size(WIDTH, HEIGHT)
         .resizable(false)
         .maximizable(false)

@@ -87,7 +87,7 @@ async function chooseEnv(name) {
   try {
     applyEnv(await invoke("env_set", { name }));
   } catch (error) {
-    envMessage.value = typeof error === "string" && error.trim() ? error : "Hãy đổi chế độ trong cửa sổ ứng dụng Fdict.";
+    envMessage.value = typeof error === "string" && error.trim() ? error : "Hãy đổi chế độ trong cửa sổ ứng dụng FDict.";
   } finally {
     busy.value = false;
   }

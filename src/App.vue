@@ -187,7 +187,7 @@ async function signOut() {
 <template>
   <main class="shell">
     <aside>
-      <img class="logo" src="/logo-full.svg" alt="Fdict" />
+      <img class="logo" src="/logo-full.svg" alt="FDict" />
       <nav>
         <button
           type="button"

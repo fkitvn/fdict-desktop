@@ -1,8 +1,8 @@
 {
-  "name": "fdict",
+  "name": "FDict",
   "private": true,
-  "version": "0.1.0",
-  "description": "Fdict",
+  "version": "1.0.0",
+  "description": "FDict",
   "packageManager": "yarn@4.18.1",
   "volta": {
     "node": "26.3.0"
@@ -12,7 +12,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "version:set": "node scripts/set-version.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

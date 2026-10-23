@@ -65,27 +65,20 @@ pub fn sync(app: &AppHandle) {
 }
 
 fn menu_for(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let open = MenuItem::with_id(app, "open", "Mở Fdict", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Mở FDict", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
-    let hint = MenuItem::with_id(
-        app,
-        "translate",
-        menu_text(&format!("Dịch từ đã chọn · {}", crate::hotkey::shortcut_label(app))),
-        false,
-        None::<&str>,
-    )?;
     if let Some(label) = crate::auth::session_label(app) {
         let account = MenuItem::with_id(app, "account", menu_text(&label), false, None::<&str>)?;
         let sign_out = MenuItem::with_id(app, "sign-out", "Đăng xuất", true, None::<&str>)?;
-        return Menu::with_items(app, &[&account, &hint, &open, &sign_out, &quit]);
+        return Menu::with_items(app, &[&account, &open, &sign_out, &quit]);
     }
-    Menu::with_items(app, &[&hint, &open, &quit])
+    Menu::with_items(app, &[&open, &quit])
 }
 
 fn tooltip(app: &AppHandle) -> String {
     match crate::auth::session_label(app) {
-        Some(label) => format!("Fdict — {label}"),
-        None => "Fdict".into(),
+        Some(label) => format!("FDict — {label}"),
+        None => "FDict".into(),
     }
 }
 

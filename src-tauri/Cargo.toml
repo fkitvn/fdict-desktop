@@ -1,6 +1,6 @@
 [package]
 name = "fdict"
-version = "0.1.0"
+version = "1.0.0"
 description = "Fdict cho máy tính Windows"
 authors = ["FKit"]
 edition = "2024"
