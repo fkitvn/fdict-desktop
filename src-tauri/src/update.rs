@@ -152,17 +152,46 @@ async fn download(url: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn launch(path: &PathBuf) -> Result<(), String> {
-    let ext = path.extension().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
-    let mut command = if ext == "msi" {
-        let mut command = std::process::Command::new("msiexec");
-        command.arg("/i").arg(path);
-        command
-    } else {
-        std::process::Command::new(path)
-    };
-    command.spawn().map_err(|_| "Không mở được bộ cài.".to_string())?;
+fn launch(setup: &PathBuf) -> Result<(), String> {
+    let app = std::env::current_exe().map_err(|_| "Không tìm thấy ứng dụng.".to_string())?;
+    let pid = std::process::id();
+    let script = std::env::temp_dir().join("fdict-restart.ps1");
+    let body = format!(
+        "while (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 400 }}\r\n\
+         $setup = {}\r\n\
+         $app = {}\r\n\
+         if ([IO.Path]::GetExtension($setup).ToLowerInvariant() -eq '.msi') {{\r\n\
+           Start-Process -FilePath msiexec -ArgumentList @('/i', $setup, '/qn', '/norestart') -Wait\r\n\
+         }} else {{\r\n\
+           Start-Process -FilePath $setup -ArgumentList '/S' -Wait\r\n\
+         }}\r\n\
+         Start-Process -FilePath $app\r\n",
+        ps_lit(&setup.to_string_lossy()),
+        ps_lit(&app.to_string_lossy()),
+    );
+    std::fs::write(&script, body).map_err(|_| "Không chuẩn bị được bước khởi động lại.".to_string())?;
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        std::process::Command::new("powershell")
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"])
+            .arg(&script)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|_| "Không khởi động lại được.".to_string())?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = script;
+        return Err("Chỉ hỗ trợ Windows.".into());
+    }
     Ok(())
+}
+
+fn ps_lit(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn allowed_url(url: &str) -> bool {

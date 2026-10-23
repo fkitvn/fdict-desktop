@@ -24,9 +24,15 @@ const remain = ref(0);
 const hotkeyLabel = ref("Alt + Q");
 const screen = ref("home");
 const signingIn = ref(false);
+const isDev = ref(false);
+const update = ref(null);
+const updating = ref(false);
 
 let tick = null;
 let stopAuth = null;
+let stopUpdate = null;
+
+const canUpgrade = computed(() => Boolean(update.value?.available || updating.value));
 
 const clock = computed(() => {
   const total = Math.max(0, remain.value);
@@ -63,6 +69,25 @@ async function refreshHotkey() {
     hotkeyLabel.value = (await invoke("hotkey_snapshot")).label;
   } catch {
     hotkeyLabel.value = "Alt + Q";
+  }
+}
+
+async function checkUpdate() {
+  try {
+    update.value = await invoke("update_check");
+    if (update.value?.installing) updating.value = true;
+  } catch {
+    update.value = null;
+  }
+}
+
+async function restartToUpgrade() {
+  if (updating.value || !update.value?.available) return;
+  updating.value = true;
+  try {
+    await invoke("update_install");
+  } catch {
+    updating.value = false;
   }
 }
 
@@ -103,7 +128,20 @@ onMounted(async () => {
   } catch {
     view.value.phase = "email";
   }
+  try {
+    isDev.value = (await invoke("env_snapshot")).name === "development";
+  } catch {
+    isDev.value = false;
+  }
   await refreshHotkey();
+  try {
+    stopUpdate = await listen("update", (event) => {
+      if (event.payload?.phase === "installing") updating.value = true;
+    });
+  } catch {
+    stopUpdate = null;
+  }
+  checkUpdate();
   tick = setInterval(() => {
     if (remain.value > 0) remain.value -= 1;
   }, 1000);
@@ -116,6 +154,7 @@ watch(screen, (value) => {
 onBeforeUnmount(() => {
   if (tick) clearInterval(tick);
   if (stopAuth) stopAuth();
+  if (stopUpdate) stopUpdate();
 });
 
 async function sendOtp() {
@@ -187,7 +226,10 @@ async function signOut() {
 <template>
   <main class="shell">
     <aside>
-      <img class="logo" src="/logo-full.svg" alt="FDict" />
+      <div class="brand">
+        <img class="logo" src="/logo-full.svg" alt="FDict" />
+        <span v-if="isDev" class="dev-tag">Dev</span>
+      </div>
       <nav>
         <button
           type="button"
@@ -220,7 +262,22 @@ async function signOut() {
           Cài đặt
         </button>
       </nav>
-      <div v-if="view.phase === 'welcome'" class="account">
+      <div class="aside-foot">
+        <button
+          v-if="canUpgrade"
+          class="restart"
+          type="button"
+          :disabled="updating"
+          :aria-label="updating ? 'Đang tải bản mới' : 'Khởi động lại để nâng cấp'"
+          :title="updating ? 'Đang tải bản mới' : 'Khởi động lại để nâng cấp'"
+          @click="restartToUpgrade"
+        >
+          <svg :class="{ spin: updating }" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+            <path d="M21 4v6h-6" />
+          </svg>
+        </button>
+        <div v-if="view.phase === 'welcome'" class="account">
         <img
           v-if="view.avatarUrl"
           class="avatar"
@@ -248,6 +305,7 @@ async function signOut() {
             <path d="M6 9 3 12l3 3" />
           </svg>
         </button>
+      </div>
       </div>
     </aside>
 
@@ -363,9 +421,27 @@ aside {
   border-right: 1px solid var(--border);
 }
 
+.brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .logo {
   width: 72px;
   height: 72px;
+}
+
+.dev-tag {
+  margin-top: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--button-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
 }
 
 nav {
@@ -387,8 +463,55 @@ nav button.on {
   border-color: var(--button);
 }
 
-.account {
+.aside-foot {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.restart {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--button-text);
+  background: var(--accent);
+}
+
+.restart svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.restart:hover {
+  filter: brightness(1.08);
+}
+
+.restart:disabled {
+  opacity: 0.7;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.account {
   display: flex;
   align-items: center;
   gap: 10px;

@@ -195,15 +195,15 @@ onBeforeUnmount(() => {
       <div>
         <h2>Phiên bản</h2>
         <p v-if="updating">Đang tải bản mới…</p>
-        <p v-else-if="update?.available">Có bản {{ update.latest }}. Bạn đang dùng {{ update.current }}.</p>
-        <p v-else-if="update">Phiên bản {{ update.current }}. Đã là bản mới nhất.</p>
+        <p v-else-if="update?.available">{{ update.current }} → {{ update.latest }}</p>
+        <p v-else-if="update">{{ update.current }}</p>
         <p v-else-if="updateMessage">{{ updateMessage }}</p>
         <p v-else>Đang kiểm tra…</p>
-        <p>Tự động cập nhật khi có bản mới.</p>
-        <p v-if="update?.notes">{{ update.notes }}</p>
         <p v-if="update && updateMessage" class="note">{{ updateMessage }}</p>
-        <div v-if="update?.available && !autoUpdate" class="choices upgrade">
-          <button type="button" class="on" :disabled="updating" @click="installUpdate">Nâng cấp</button>
+        <div v-if="update?.available" class="choices upgrade">
+          <button type="button" class="on" :disabled="updating" @click="installUpdate">
+            {{ updating ? "Đang tải…" : "Khởi động lại" }}
+          </button>
         </div>
       </div>
       <button
