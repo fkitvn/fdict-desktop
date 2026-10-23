@@ -84,10 +84,10 @@ jobs:
         if: steps.released.outputs.exists != 'true'
         shell: pwsh
         env:
-          OTA_SERVICE_TOKEN: ${{ secrets.OTA_SERVICE_TOKEN }}
+          DESKTOP_PUBLISH_TOKEN: ${{ secrets.DESKTOP_PUBLISH_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if (-not $env:OTA_SERVICE_TOKEN) { throw "Thiếu secret OTA_SERVICE_TOKEN." }
+          if (-not $env:DESKTOP_PUBLISH_TOKEN) { throw "Thiếu secret DESKTOP_PUBLISH_TOKEN." }
           $exe = Get-ChildItem "src-tauri\target\release\bundle\nsis" -Filter "*$env:VERSION*setup.exe" | Select-Object -First 1
           if (-not $exe) { throw "Không thấy bộ cài." }
           $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$env:VERSION/$($exe.Name)"
@@ -98,5 +98,5 @@ jobs:
             url = $url
             bytes = $exe.Length
           } | ConvertTo-Json
-          Invoke-WebRequest -Method Post -Uri "https://dict.fkit.vn/api/desktop/publish" -Headers @{ "x-service-token" = $env:OTA_SERVICE_TOKEN; "content-type" = "application/json" } -Body $body | Out-Null
+          Invoke-WebRequest -Method Post -Uri "https://dict.fkit.vn/api/desktop/publish" -Headers @{ "x-desktop-token" = $env:DESKTOP_PUBLISH_TOKEN; "content-type" = "application/json" } -Body $body | Out-Null
           Write-Output $url
