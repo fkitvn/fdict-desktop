@@ -60,12 +60,16 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@4.18.1 --activate
-          $nodeDir = Split-Path (Get-Command node).Source
-          $env:Path = "$nodeDir;$env:Path"
-          Add-Content -Path $env:GITHUB_PATH -Value $nodeDir
-          $version = (yarn --version).Trim()
-          if ($version -notlike "4.*") { throw "Đang dùng Yarn $version, cần Yarn 4." }
-          yarn install --immutable
+          $shim = Join-Path $env:RUNNER_TEMP "yarn4"
+          New-Item -ItemType Directory -Force -Path $shim | Out-Null
+          Set-Content -Path (Join-Path $shim "yarn.cmd") -Value "@echo off`r`ncorepack yarn %*`r`n" -Encoding ascii
+          Set-Content -Path (Join-Path $shim "yarn.ps1") -Value "corepack yarn @args`r`n" -Encoding ascii
+          [IO.File]::WriteAllText((Join-Path $shim "yarn"), "#!/bin/sh`nexec corepack yarn `"`$@`"`n")
+          $env:Path = "$shim;$env:Path"
+          Add-Content -Path $env:GITHUB_PATH -Value $shim
+          $version = (corepack yarn --version).Trim()
+          if ($version -notlike "4.*") { throw "Yarn $version" }
+          corepack yarn install --immutable
 
       - name: Build and publish the GitHub release
         if: steps.released.outputs.exists != 'true'
