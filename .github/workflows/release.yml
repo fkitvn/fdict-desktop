@@ -86,22 +86,31 @@ jobs:
           args: --bundles nsis
 
       - name: Record the download link
-        if: steps.released.outputs.exists != 'true'
         shell: pwsh
         env:
           DESKTOP_PUBLISH_TOKEN: ${{ secrets.DESKTOP_PUBLISH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           if (-not $env:DESKTOP_PUBLISH_TOKEN) { throw "Thiếu secret DESKTOP_PUBLISH_TOKEN." }
-          $exe = Get-ChildItem "src-tauri\target\release\bundle\nsis" -Filter "*$env:VERSION*setup.exe" | Select-Object -First 1
-          if (-not $exe) { throw "Không thấy bộ cài." }
-          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$env:VERSION/$($exe.Name)"
+          $exe = Get-ChildItem "src-tauri\target\release\bundle\nsis" -Filter "*$env:VERSION*setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($exe) {
+            $name = $exe.Name
+            $bytes = $exe.Length
+          } else {
+            $release = gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY --json assets | ConvertFrom-Json
+            $asset = @($release.assets) | Where-Object { $_.name -like "*$env:VERSION*setup.exe" } | Select-Object -First 1
+            if (-not $asset) { throw "Không thấy bộ cài." }
+            $name = $asset.name
+            $bytes = $asset.size
+          }
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$env:VERSION/$name"
           $body = @{
             version = $env:VERSION
             environment = "production"
             notes = "Bản máy tính Fdict."
             url = $url
-            bytes = $exe.Length
+            bytes = $bytes
           } | ConvertTo-Json
           Invoke-WebRequest -Method Post -Uri "https://dict.fkit.vn/api/desktop/publish" -Headers @{ "x-desktop-token" = $env:DESKTOP_PUBLISH_TOKEN; "content-type" = "application/json" } -Body $body | Out-Null
           Write-Output $url
