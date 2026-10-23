@@ -12,6 +12,9 @@ mod vocab;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            crate::tray::show_main(app);
+        }))
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             tray::install(app)?;
@@ -37,8 +40,6 @@ pub fn run() {
             vocab::vocab_update,
             vocab::vocab_remove,
             env::env_snapshot,
-            env::env_set,
-            env::env_set_dict,
             update::update_check,
             update::update_install,
             update::update_auto_snapshot,

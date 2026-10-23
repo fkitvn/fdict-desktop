@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "FDict",
         "width": 1200,
         "height": 760,

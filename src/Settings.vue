@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { setTheme, themePreference } from "./theme.js";
@@ -10,91 +10,23 @@ const themes = [
   { value: "dark", label: "Tối" },
   { value: "system", label: "Hệ thống" },
 ];
-const serverEnv = ref("development");
-const envHost = ref("127.0.0.1:8001");
-const envOrigin = ref("http://127.0.0.1:8001");
-const editingHost = ref(false);
-const hostDraft = ref("");
-const hostInput = ref(null);
-const envMessage = ref("");
 const hotkeyLabel = ref("Alt + F");
 const capturing = ref(false);
 const hotkeyMessage = ref("");
-const busy = ref(false);
-const developer = computed(() => serverEnv.value === "development");
 const update = ref(null);
 const updateMessage = ref("");
 const updating = ref(false);
 const autoUpdate = ref(true);
 
-let stopAuth = null;
 let stopUpdate = null;
 
 function invokeError(error) {
   return typeof error === "string" ? error : "Không kết nối được máy chủ.";
 }
 
-function hostLabel(origin) {
-  const value = String(origin || "").replace(/\/$/, "");
-  if (value.startsWith("https://")) return value;
-  return value.replace(/^http:\/\//, "");
-}
-
-function applyEnv(next) {
-  if (!next) return;
-  serverEnv.value = next.name || "development";
-  envOrigin.value = next.dictOrigin || "http://127.0.0.1:8001";
-  envHost.value = hostLabel(envOrigin.value) || "127.0.0.1:8001";
-  if (serverEnv.value !== "development") editingHost.value = false;
-}
-
-async function startEditHost() {
-  if (!developer.value || busy.value) return;
-  hostDraft.value = envHost.value || "127.0.0.1:8001";
-  editingHost.value = true;
-  await nextTick();
-  hostInput.value?.focus();
-  hostInput.value?.select();
-}
-
-function cancelHost() {
-  editingHost.value = false;
-}
-
-async function saveHost() {
-  if (!editingHost.value || busy.value) return;
-  busy.value = true;
-  envMessage.value = "";
-  try {
-    applyEnv(await invoke("env_set_dict", { origin: hostDraft.value }));
-    editingHost.value = false;
-  } catch (error) {
-    envMessage.value = typeof error === "string" && error.trim() ? error : "Không đổi được máy chủ.";
-  } finally {
-    busy.value = false;
-  }
-}
-
 async function chooseTheme(value) {
   theme.value = value;
   await setTheme(value);
-}
-
-async function chooseEnv(name) {
-  if (name === serverEnv.value || busy.value) return;
-  busy.value = true;
-  envMessage.value = "";
-  try {
-    applyEnv(await invoke("env_set", { name }));
-  } catch (error) {
-    envMessage.value = typeof error === "string" && error.trim() ? error : "Hãy đổi chế độ trong cửa sổ ứng dụng FDict.";
-  } finally {
-    busy.value = false;
-  }
-}
-
-function toggleDeveloper() {
-  chooseEnv(developer.value ? "production" : "development");
 }
 
 async function checkUpdate() {
@@ -195,20 +127,6 @@ onMounted(async () => {
   } catch {
     hotkeyLabel.value = "Alt + F";
   }
-  try {
-    applyEnv(await invoke("env_snapshot"));
-  } catch {
-    serverEnv.value = "development";
-    envOrigin.value = "http://127.0.0.1:8001";
-    envHost.value = "127.0.0.1:8001";
-  }
-  try {
-    stopAuth = await listen("auth-changed", (event) => {
-      if (event.payload?.notice) envMessage.value = event.payload.notice;
-    });
-  } catch {
-    stopAuth = null;
-  }
   window.addEventListener("blur", onWindowBlur);
   try {
     autoUpdate.value = (await invoke("update_auto_snapshot")).enabled;
@@ -226,7 +144,6 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  if (stopAuth) stopAuth();
   if (stopUpdate) stopUpdate();
   window.removeEventListener("keydown", onHotkeyKeydown, true);
   window.removeEventListener("blur", onWindowBlur);
@@ -254,44 +171,6 @@ onBeforeUnmount(() => {
           {{ item.label }}
         </button>
       </div>
-    </article>
-
-    <article class="setting">
-      <div>
-        <h2>Chế độ nhà phát triển</h2>
-        <div class="server">
-          <input
-            v-if="editingHost"
-            ref="hostInput"
-            v-model="hostDraft"
-            spellcheck="false"
-            aria-label="Địa chỉ máy chủ"
-            @keydown.enter.prevent="saveHost"
-            @keydown.escape="cancelHost"
-          />
-          <p v-else>{{ envHost }}</p>
-          <button
-            v-if="developer"
-            type="button"
-            class="icon"
-            :aria-label="editingHost ? 'Lưu máy chủ' : 'Đổi máy chủ'"
-            :disabled="busy"
-            @click="editingHost ? saveHost() : startEditHost()"
-          >
-            <svg v-if="editingHost" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-          </button>
-        </div>
-        <p v-if="envMessage" class="note">{{ envMessage }}</p>
-      </div>
-      <button type="button" class="switch" :class="{ on: developer }" :disabled="busy" aria-label="Chế độ nhà phát triển" @click="toggleDeveloper">
-        <span class="switch-knob"></span>
-      </button>
     </article>
 
     <article class="setting">
@@ -375,58 +254,6 @@ onBeforeUnmount(() => {
 
 .setting .note {
   color: var(--note);
-}
-
-.server {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.server p {
-  margin: 0;
-}
-
-.server input {
-  width: 190px;
-  margin: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 14px;
-}
-
-.icon {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  margin: 0;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: transparent;
-}
-
-.icon svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.icon:hover {
-  color: var(--text);
-  background: var(--surface);
 }
 
 .choices {

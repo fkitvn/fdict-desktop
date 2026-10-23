@@ -20,7 +20,6 @@ Debug builds talk to `http://127.0.0.1:8000` and `http://127.0.0.1:8001`. Releas
 Production installer (`FDict`):
 
 ```powershell
-$env:FDICT_BUILD_ENV='production'
 yarn tauri build --bundles nsis
 ```
 
@@ -29,7 +28,6 @@ Output: `src-tauri\target\release\bundle\nsis\FDict_0.1.0_x64-setup.exe`
 Development installer (`FDict Dev`, installs beside production):
 
 ```powershell
-$env:FDICT_BUILD_ENV='development'
 yarn tauri build --bundles nsis --config src-tauri/tauri.dev.conf.json
 ```
 
