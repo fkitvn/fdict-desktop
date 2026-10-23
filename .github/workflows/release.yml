@@ -111,6 +111,15 @@ jobs:
             notes = "Bản máy tính Fdict."
             url = $url
             bytes = $bytes
-          } | ConvertTo-Json
-          Invoke-WebRequest -Method Post -Uri "https://dict.fkit.vn/api/desktop/publish" -Headers @{ "x-desktop-token" = $env:DESKTOP_PUBLISH_TOKEN; "content-type" = "application/json" } -Body $body | Out-Null
+          } | ConvertTo-Json -Compress
+          $jsonPath = Join-Path $env:RUNNER_TEMP "desktop-publish.json"
+          [System.IO.File]::WriteAllText($jsonPath, $body, [System.Text.UTF8Encoding]::new($false))
+          $ok = $false
+          foreach ($attempt in 1..5) {
+            $result = & curl.exe --silent --show-error --http1.1 --fail-with-body -X POST "https://dict.fkit.vn/api/desktop/publish" -H "content-type: application/json" -H "x-desktop-token: $($env:DESKTOP_PUBLISH_TOKEN)" -H "user-agent: fdict-desktop-ci" --data-binary "@$jsonPath" 2>&1
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-Output "Lần $attempt : $result"
+            Start-Sleep -Seconds (4 * $attempt)
+          }
+          if (-not $ok) { throw "Không ghi được link tải xuống." }
           Write-Output $url

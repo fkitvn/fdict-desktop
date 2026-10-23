@@ -27,6 +27,7 @@ const signingIn = ref(false);
 const isDev = ref(false);
 const update = ref(null);
 const updating = ref(false);
+const confirmSignOut = ref(false);
 
 let tick = null;
 let stopAuth = null;
@@ -204,7 +205,12 @@ function changeEmail() {
   remain.value = 0;
 }
 
+function askSignOut() {
+  confirmSignOut.value = true;
+}
+
 async function signOut() {
+  confirmSignOut.value = false;
   busy.value = true;
   try {
     apply(await invoke("auth_sign_out"));
@@ -295,7 +301,7 @@ async function signOut() {
           aria-label="Đăng xuất"
           title="Đăng xuất"
           :disabled="busy"
-          @click="signOut"
+          @click="askSignOut"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -382,6 +388,24 @@ async function signOut() {
       </form>
     </section>
   </main>
+
+  <div
+    v-if="confirmSignOut"
+    class="confirm"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="signout-title"
+    @click.self="confirmSignOut = false"
+  >
+    <div class="confirm-card">
+      <h2 id="signout-title">Đăng xuất?</h2>
+      <p>Bạn sẽ cần mã OTP để đăng nhập lại.</p>
+      <div class="confirm-actions">
+        <button type="button" @click="confirmSignOut = false">Huỷ</button>
+        <button type="button" class="primary" :disabled="busy" @click="signOut">Đăng xuất</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style>
@@ -665,5 +689,52 @@ button:disabled {
   margin-top: 14px;
   font-size: 14px;
   color: var(--note);
+}
+
+.confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+
+.confirm-card {
+  width: min(100%, 360px);
+  padding: 24px 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.confirm-card h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.confirm-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.confirm-actions button {
+  margin-top: 0;
+  padding: 10px 18px;
+}
+
+.confirm-actions .primary {
+  width: auto;
 }
 </style>
