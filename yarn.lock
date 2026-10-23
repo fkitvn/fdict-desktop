@@ -479,9 +479,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fdict@workspace:.":
+"FDict@workspace:.":
   version: 0.0.0-use.local
-  resolution: "fdict@workspace:."
+  resolution: "FDict@workspace:."
   dependencies:
     "@tauri-apps/api": "npm:^2"
     "@tauri-apps/cli": "npm:^2"
