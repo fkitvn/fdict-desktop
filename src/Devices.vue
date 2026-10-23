@@ -7,7 +7,7 @@ import DeviceModel from "./DeviceModel.vue";
 const items = ref([]);
 const loading = ref(true);
 const message = ref("");
-const shopUrl = ref("https://fkit.vn/dict");
+const shopUrl = ref("https://fkit.vn/fdict");
 
 function invokeError(error) {
   return typeof error === "string" ? error : "Không kết nối được máy chủ.";
@@ -26,9 +26,9 @@ async function load() {
   try {
     const env = await invoke("env_snapshot");
     const origin = String(env?.authOrigin || "").replace(/\/$/, "");
-    if (origin) shopUrl.value = origin + "/dict";
+    if (origin) shopUrl.value = origin + "/fdict";
   } catch {
-    shopUrl.value = "https://fkit.vn/dict";
+    shopUrl.value = "https://fkit.vn/fdict";
   }
   try {
     items.value = await invoke("device_list");
