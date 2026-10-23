@@ -34,7 +34,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: yarn
 
       - name: Read version
         id: version
@@ -53,13 +52,19 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install dependencies
+      - name: Use Yarn 4
         if: steps.released.outputs.exists != 'true'
-        shell: bash
+        shell: pwsh
         run: |
           corepack enable
           corepack prepare yarn@4.18.1 --activate
-          yarn install --immutable
+          $nodeDir = Split-Path (Get-Command node).Source
+          $nodeDir | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Install dependencies
+        if: steps.released.outputs.exists != 'true'
+        shell: bash
+        run: yarn install --immutable
 
       - name: Build and publish the GitHub release
         if: steps.released.outputs.exists != 'true'
