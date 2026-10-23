@@ -1,6 +1,6 @@
 # Fdict
 
-Windows app for looking up English and Vietnamese while you read. Select text and press **Alt + F**.
+Windows app for looking up English and Vietnamese while you read. Select text and press **Alt + Q**.
 
 Requires Windows 10 or later with WebView2, Rust, and [Volta](https://volta.sh/). Node is pinned to 26.3.0.
 

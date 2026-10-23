@@ -16,7 +16,7 @@ const hint = computed(() => {
 });
 const autoAdd = ref(true);
 const autoSpeak = ref(localStorage.getItem("fdict-auto-speak") === "1");
-const hotkeyLabel = ref("Alt + F");
+const hotkeyLabel = ref("Alt + Q");
 const removing = ref("");
 let stopLookup = null;
 
@@ -146,9 +146,9 @@ async function toggleSave() {
 
 onMounted(async () => {
   try {
-    hotkeyLabel.value = (await invoke("hotkey_snapshot")).label || "Alt + F";
+    hotkeyLabel.value = (await invoke("hotkey_snapshot")).label || "Alt + Q";
   } catch {
-    hotkeyLabel.value = "Alt + F";
+    hotkeyLabel.value = "Alt + Q";
   }
   try {
     autoAdd.value = !!(await invoke("vocab_snapshot")).autoAdd;

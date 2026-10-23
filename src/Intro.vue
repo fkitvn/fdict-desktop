@@ -3,7 +3,7 @@ import DeviceModel from "./DeviceModel.vue";
 
 const emit = defineEmits(["login"]);
 defineProps({
-  hotkeyLabel: { type: String, default: "Alt + F" },
+  hotkeyLabel: { type: String, default: "Alt + Q" },
 });
 </script>
 

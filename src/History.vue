@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import SpeakButton from "./SpeakButton.vue";
 
 defineProps({
-  hotkeyLabel: { type: String, default: "Alt + F" },
+  hotkeyLabel: { type: String, default: "Alt + Q" },
 });
 
 const items = ref([]);

@@ -10,7 +10,7 @@ const themes = [
   { value: "dark", label: "Tối" },
   { value: "system", label: "Hệ thống" },
 ];
-const hotkeyLabel = ref("Alt + F");
+const hotkeyLabel = ref("Alt + Q");
 const capturing = ref(false);
 const hotkeyMessage = ref("");
 const update = ref(null);
@@ -125,7 +125,7 @@ onMounted(async () => {
   try {
     hotkeyLabel.value = (await invoke("hotkey_snapshot")).label;
   } catch {
-    hotkeyLabel.value = "Alt + F";
+    hotkeyLabel.value = "Alt + Q";
   }
   window.addEventListener("blur", onWindowBlur);
   try {

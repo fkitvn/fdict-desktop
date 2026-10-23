@@ -220,7 +220,7 @@ fn default_hotkey() -> SavedHotkey {
         ctrl: false,
         shift: false,
         super_key: false,
-        code: "KeyF".into(),
+        code: "KeyQ".into(),
     }
 }
 
@@ -311,9 +311,9 @@ fn resolved_hotkey(app: &AppHandle) -> SavedHotkey {
     next
 }
 
-// Bản đã cài trước đây mặc định Alt + Q. Chỉ thay đúng tổ hợp đó.
+// Bản đã cài trước đây mặc định Alt + F. Chỉ thay đúng tổ hợp đó.
 fn is_previous_default(hotkey: &SavedHotkey) -> bool {
-    hotkey.alt && !hotkey.ctrl && !hotkey.shift && !hotkey.super_key && hotkey.code == "KeyQ"
+    hotkey.alt && !hotkey.ctrl && !hotkey.shift && !hotkey.super_key && hotkey.code == "KeyF"
 }
 
 fn load(app: &AppHandle) -> SavedHotkey {

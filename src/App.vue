@@ -21,7 +21,7 @@ const otp = ref("");
 const message = ref("");
 const busy = ref(false);
 const remain = ref(0);
-const hotkeyLabel = ref("Alt + F");
+const hotkeyLabel = ref("Alt + Q");
 const screen = ref("home");
 const signingIn = ref(false);
 
@@ -62,7 +62,7 @@ async function refreshHotkey() {
   try {
     hotkeyLabel.value = (await invoke("hotkey_snapshot")).label;
   } catch {
-    hotkeyLabel.value = "Alt + F";
+    hotkeyLabel.value = "Alt + Q";
   }
 }
 
