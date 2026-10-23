@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - prod
+  pull_request:
+    branches:
+      - prod
+
+concurrency:
+  group: release-prod
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/app-version.mjs
+
+  release:
+    needs: version
+    if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(node scripts/app-version.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Skip when this version is already released
+        id: released
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.released.outputs.exists != 'true'
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare yarn@4.18.1 --activate
+          yarn install --immutable
+
+      - name: Build and publish the GitHub release
+        if: steps.released.outputs.exists != 'true'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FDICT_BUILD_ENV: production
+        with:
+          tagName: v__VERSION__
+          releaseName: Fdict v__VERSION__
+          releaseBody: Bản máy tính Fdict.
+          releaseDraft: false
+          prerelease: false
+          args: --bundles nsis
+
+      - name: Record the download link
+        if: steps.released.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          FDICT_PUBLISH_TOKEN: ${{ secrets.FDICT_PUBLISH_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if (-not $env:FDICT_PUBLISH_TOKEN) { throw "Thiếu secret FDICT_PUBLISH_TOKEN." }
+          $exe = Get-ChildItem "src-tauri\target\release\bundle\nsis" -Filter "*$env:VERSION*setup.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Không thấy bộ cài." }
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$env:VERSION/$($exe.Name)"
+          $body = @{
+            version = $env:VERSION
+            environment = "production"
+            notes = "Bản máy tính Fdict."
+            url = $url
+            bytes = $exe.Length
+          } | ConvertTo-Json
+          Invoke-WebRequest -Method Post -Uri "https://dict.fkit.vn/api/desktop/publish" -Headers @{ "x-service-token" = $env:FDICT_PUBLISH_TOKEN; "content-type" = "application/json" } -Body $body | Out-Null
+          Write-Output $url
