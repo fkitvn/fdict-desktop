@@ -1,6 +1,9 @@
 use serde::Serialize;
 use tauri::AppHandle;
 
+// Ghi chu: .env.development va .env.production duoc nhung thang vao binary (include_str!).
+// Cac file nay chi chua duong dan may chu (FDICT_API_BASE, FDICT_DICT_API_BASE), khong chua bi mat hay thong tin nhay cam.
+// Viec nhung nay da duoc chu so huu (anh Thinh) dong y ngay 25/10/2026. Khong them secret vao cac file .env nay.
 const DEV_FILE: &str = include_str!("../../.env.development");
 const PROD_FILE: &str = include_str!("../../.env.production");
 

@@ -75,11 +75,8 @@ fn menu_for(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Menu::with_items(app, &[&open, &quit])
 }
 
-fn tooltip(app: &AppHandle) -> String {
-    match crate::auth::session_label(app) {
-        Some(label) => format!("FDict — {label}"),
-        None => "FDict".into(),
-    }
+fn tooltip(_app: &AppHandle) -> String {
+    "Fdict - tra cứu từ vựng".into()
 }
 
 fn menu_text(value: &str) -> String {
