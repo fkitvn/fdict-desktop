@@ -1,0 +1,49 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.3.0
+          package-manager-cache: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(node scripts/app-version.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Linux system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file
+      - name: Install dependencies
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare yarn@4.18.1 --activate
+          corepack yarn install --immutable
+
+      - name: Build (no publishing)
+        shell: bash
+        env:
+          FDICT_BUILD_ENV: production
+        run: corepack yarn tauri build --bundles appimage,deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fdict-${{ steps.version.outputs.version }}-linux-x64
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error

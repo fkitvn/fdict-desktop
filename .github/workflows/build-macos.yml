@@ -1,0 +1,53 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.3.0
+          package-manager-cache: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(node scripts/app-version.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare yarn@4.18.1 --activate
+          corepack yarn install --immutable
+
+      - name: Build (no publishing)
+        shell: bash
+        env:
+          FDICT_BUILD_ENV: production
+        run: corepack yarn tauri build --target universal-apple-darwin --bundles app,dmg
+      - name: Zip .app
+        shell: bash
+        run: |
+          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+          ditto -c -k --keepParent FDict.app "FDict_${{ steps.version.outputs.version }}_universal.app.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fdict-${{ steps.version.outputs.version }}-macos-universal
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.zip
+          if-no-files-found: error
