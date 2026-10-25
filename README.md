@@ -1,4 +1,4 @@
-# Fdict
+# FDict
 
 Windows app for looking up English and Vietnamese while you read. Select text and press **Alt + Q**.
 

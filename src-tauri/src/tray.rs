@@ -76,7 +76,7 @@ fn menu_for(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 }
 
 fn tooltip(_app: &AppHandle) -> String {
-    "Fdict - tra cứu từ vựng".into()
+    "FDict - tra cứu từ vựng".into()
 }
 
 fn menu_text(value: &str) -> String {

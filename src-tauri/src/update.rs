@@ -135,7 +135,7 @@ async fn download(url: &str) -> Result<PathBuf, String> {
     let name = if url.to_ascii_lowercase().split('?').next().unwrap_or("").ends_with(".msi") {
         "fdict-setup.msi"
     } else {
-        "fdict-setup.exe"
+        "FDict-setup.exe"
     };
     let path = std::env::temp_dir().join(name);
     let client = reqwest::Client::builder()

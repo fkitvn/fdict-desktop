@@ -79,8 +79,8 @@ jobs:
           FDICT_BUILD_ENV: production
         with:
           tagName: v__VERSION__
-          releaseName: Fdict v__VERSION__
-          releaseBody: Bản máy tính Fdict.
+          releaseName: FDict v__VERSION__
+          releaseBody: Bản máy tính FDict.
           releaseDraft: false
           prerelease: false
           args: --bundles nsis
@@ -108,7 +108,7 @@ jobs:
           $body = @{
             version = $env:VERSION
             environment = "production"
-            notes = "Bản máy tính Fdict."
+            notes = "Bản máy tính FDict."
             url = $url
             bytes = $bytes
           } | ConvertTo-Json -Compress

@@ -49,7 +49,7 @@ fn device_view(item: &serde_json::Value) -> Option<DeviceView> {
     let battery = item.get("last_battery").and_then(|value| value.as_i64());
     Some(DeviceView {
         id,
-        name: if name.is_empty() { "Fdict".into() } else { name },
+        name: if name.is_empty() { "FDict One".into() } else { name },
         version,
         seen,
         battery,

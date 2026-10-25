@@ -71,7 +71,7 @@ onMounted(load);
     <article class="offer">
       <DeviceModel compact />
       <div class="pitch">
-        <h2>Fdict One</h2>
+        <h2>FDict One</h2>
         <p>Thiết bị học từ vựng cầm tay. Màn hình màu, bốn phím vật lý và sáu chế độ luyện tập, không thông báo làm xao nhãng.</p>
         <button class="primary" type="button" @click="openShop">Mua thiết bị</button>
       </div>

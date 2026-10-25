@@ -172,7 +172,7 @@ pub async fn save_pair(app: &AppHandle, word: &str, translation: &str, direction
             let message = match body.get("state").and_then(|value| value.as_str()) {
                 Some("updated") => "Đã cập nhật nghĩa mới.",
                 Some("same") => "Đã có trong danh sách.",
-                _ => "Đã lưu để học trên Fdict One.",
+                _ => "Đã lưu để học trên FDict One.",
             };
             let id = body.get("id").and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
             ("saved".into(), message.into(), id)
