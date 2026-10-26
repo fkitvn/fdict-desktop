@@ -23,12 +23,15 @@ jobs:
           package-manager-cache: false
       - run: node scripts/app-version.mjs
 
-  release:
+  prepare-release:
     needs: version
     if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      exists: ${{ steps.released.outputs.exists }}
     steps:
       - uses: actions/checkout@v5
 
@@ -54,8 +57,37 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install dependencies
+      # Create the release once, before the parallel build jobs, so Windows and
+      # Linux tauri-action runs both find it by tag and only upload assets.
+      - name: Create the GitHub release
         if: steps.released.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "FDict v$VERSION" --notes "Bản máy tính FDict."
+
+  release:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.exists != 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.3.0
+          package-manager-cache: false
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=${{ needs.prepare-release.outputs.version }}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
         shell: pwsh
         run: |
           corepack enable
@@ -72,7 +104,6 @@ jobs:
           corepack yarn install --immutable
 
       - name: Build and publish the GitHub release
-        if: steps.released.outputs.exists != 'true'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -123,3 +154,44 @@ jobs:
           }
           if (-not $ok) { throw "Không ghi được link tải xuống." }
           Write-Output $url
+
+  release-linux:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.exists != 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26.3.0
+          package-manager-cache: false
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare yarn@4.18.1 --activate
+          version="$(corepack yarn --version)"
+          case "$version" in 4.*) ;; *) echo "Yarn $version"; exit 1 ;; esac
+          corepack yarn install --immutable
+
+      - name: Build and upload Linux bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FDICT_BUILD_ENV: production
+        with:
+          tagName: v__VERSION__
+          releaseName: FDict v__VERSION__
+          releaseBody: Bản máy tính FDict.
+          releaseDraft: false
+          prerelease: false
+          args: --bundles appimage,deb
