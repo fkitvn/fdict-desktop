@@ -5,50 +5,157 @@ defineProps({
   compact: { type: Boolean, default: false },
 });
 
-const rotX = ref(-12);
-const rotY = ref(-28);
-let spinX = -12;
-let spinY = -28;
+const host = ref(null);
+const ready = ref(false);
+const SPEED = (Math.PI * 2) / 12; // 1 vòng / 12 giây
+const RESUME_DELAY = 2000;
+
+let THREE = null;
+let renderer = null;
+let scene = null;
+let camera = null;
+let pivot = null;
+let ro = null;
+let raf = 0;
+let last = 0;
+let disposed = false;
 let dragging = false;
-let lastX = 0;
-let lastY = 0;
-let frame = 0;
+let dragX = 0;
+let dragRot = 0;
+let resumeAt = 0;
+let fitR = 1.4;
+let fitH = 0.9;
 
-function tick() {
-  if (!dragging) {
-    spinY += 0.35;
-    rotY.value = spinY;
+function measure() {
+  const rx = pivot.rotation.x;
+  const ry = pivot.rotation.y;
+  pivot.rotation.set(0, 0, 0);
+  pivot.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(pivot);
+  pivot.rotation.set(rx, ry, 0);
+  const ax = Math.max(Math.abs(box.min.x), Math.abs(box.max.x));
+  const az = Math.max(Math.abs(box.min.z), Math.abs(box.max.z));
+  const ay = Math.max(Math.abs(box.min.y), Math.abs(box.max.y));
+  fitR = Math.sqrt(ax * ax + az * az);
+  fitH = ay * Math.cos(rx) + fitR * Math.abs(Math.sin(rx));
+}
+
+function fit() {
+  const v = (camera.fov * Math.PI) / 180;
+  const h = 2 * Math.atan(Math.tan(v / 2) * camera.aspect);
+  const d = Math.max((fitR * 1.12) / Math.tan(h / 2), (fitH * 1.12) / Math.tan(v / 2)) + fitR;
+  camera.position.set(0, 0, d);
+  camera.lookAt(0, 0, 0);
+  camera.near = Math.max(0.01, d - fitR * 2);
+  camera.far = d + fitR * 2;
+  camera.updateProjectionMatrix();
+}
+
+function resize() {
+  if (!renderer || !host.value) return;
+  const w = host.value.clientWidth || 1;
+  const h = host.value.clientHeight || 1;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  fit();
+}
+
+function tick(t) {
+  if (disposed) return;
+  const dt = last ? Math.min((t - last) / 1000, 0.1) : 0;
+  last = t;
+  if (pivot && !dragging && performance.now() >= resumeAt) {
+    pivot.rotation.y = (pivot.rotation.y + SPEED * dt) % (Math.PI * 2);
   }
-  frame = requestAnimationFrame(tick);
+  renderer.render(scene, camera);
+  raf = requestAnimationFrame(tick);
 }
 
-function pointerDown(event) {
+function pointerDown(e) {
+  if (!pivot) return;
   dragging = true;
-  lastX = event.clientX;
-  lastY = event.clientY;
-  event.currentTarget.setPointerCapture(event.pointerId);
+  dragX = e.clientX;
+  dragRot = pivot.rotation.y;
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 }
-
-function pointerMove(event) {
-  if (!dragging) return;
-  spinY += (event.clientX - lastX) * 0.45;
-  spinX = Math.max(-28, Math.min(18, spinX + (event.clientY - lastY) * 0.3));
-  lastX = event.clientX;
-  lastY = event.clientY;
-  rotX.value = spinX;
-  rotY.value = spinY;
+function pointerMove(e) {
+  if (dragging && pivot) pivot.rotation.y = dragRot + (e.clientX - dragX) * 0.012;
 }
-
 function pointerUp() {
+  if (!dragging) return;
   dragging = false;
+  resumeAt = performance.now() + RESUME_DELAY;
 }
 
-onMounted(() => {
-  frame = requestAnimationFrame(tick);
+onMounted(async () => {
+  try {
+    const [mod, { GLTFLoader }] = await Promise.all([
+      import("three"),
+      import("three/examples/jsm/loaders/GLTFLoader.js"),
+    ]);
+    if (disposed) return;
+    THREE = mod;
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.domElement.className = "dm-canvas";
+    host.value.appendChild(renderer.domElement);
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xffe2c0, 1.4));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(3, 4, 5);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0xffb066, 1.2);
+    rim.position.set(-4, 1, -3);
+    scene.add(rim);
+    pivot = new THREE.Group();
+    pivot.rotation.x = 0.12;
+    pivot.rotation.y = -0.5;
+    scene.add(pivot);
+
+    const gltf = await new GLTFLoader().loadAsync("/fkit-bang-lai.glb");
+    if (disposed) return;
+    const obj = gltf.scene;
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+    obj.position.sub(box.getCenter(new THREE.Vector3()));
+    const g = new THREE.Group();
+    g.add(obj);
+    g.scale.setScalar(2.6 / Math.max(size.x, size.y, size.z || 1));
+    pivot.add(g);
+    measure();
+    resize();
+    ro = new ResizeObserver(resize);
+    ro.observe(host.value);
+    ready.value = true;
+    raf = requestAnimationFrame(tick);
+  } catch (e) {
+    console.warn("[DeviceModel] Không tải được mô hình 3D:", e);
+  }
 });
 
 onBeforeUnmount(() => {
-  if (frame) cancelAnimationFrame(frame);
+  disposed = true;
+  if (raf) cancelAnimationFrame(raf);
+  if (ro) ro.disconnect();
+  if (scene) {
+    scene.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+          Object.keys(m).forEach((k) => { if (m[k] && m[k].isTexture) m[k].dispose(); });
+          m.dispose();
+        });
+      }
+    });
+  }
+  if (renderer) {
+    renderer.dispose();
+    renderer.forceContextLoss?.();
+    renderer.domElement.remove();
+  }
+  renderer = scene = camera = pivot = THREE = null;
 });
 </script>
 
@@ -60,173 +167,49 @@ onBeforeUnmount(() => {
     @pointermove="pointerMove"
     @pointerup="pointerUp"
     @pointercancel="pointerUp"
+    @lostpointercapture="pointerUp"
   >
-    <div class="box" :style="{ transform: `rotateX(${rotX}deg) rotateY(${rotY}deg)` }">
-      <div class="face front">
-        <div class="screen">
-          <img src="/logo-full.svg" alt="" />
-        </div>
-        <div class="keys">
-          <span class="pink"></span>
-          <span class="orange"></span>
-          <span class="red"></span>
-          <span class="green"></span>
-        </div>
-        <i class="mic"></i>
-      </div>
-      <div class="face back"></div>
-      <div class="face left"></div>
-      <div class="face right"></div>
-      <div class="face top"></div>
-      <div class="face bottom"></div>
-    </div>
+    <div ref="host" class="host" :class="{ ready }" role="img" aria-label="Mô hình 3D FDict, kéo ngang để xoay"></div>
   </div>
 </template>
 
 <style scoped>
 .device-model {
+  position: relative;
   height: 380px;
-  display: grid;
-  place-items: center;
-  perspective: 900px;
   cursor: grab;
   user-select: none;
   touch-action: none;
   background:
-    radial-gradient(ellipse 220px 28px at 50% 78%, rgb(0 0 0 / 16%), transparent 70%),
-    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 46%);
+    radial-gradient(ellipse 220px 28px at 50% 82%, rgb(0 0 0 / 14%), transparent 70%),
+    radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 46%);
+}
+
+.device-model:active {
+  cursor: grabbing;
 }
 
 .device-model.compact {
   height: 248px;
   background:
-    radial-gradient(ellipse 150px 20px at 50% 80%, rgb(0 0 0 / 16%), transparent 70%),
+    radial-gradient(ellipse 150px 20px at 50% 84%, rgb(0 0 0 / 14%), transparent 70%),
     radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 52%);
 }
 
-.compact .box {
-  scale: 0.72;
-}
-
-.box {
-  width: 320px;
-  height: 188px;
-  position: relative;
-  transform-style: preserve-3d;
-}
-
-.face {
+.host {
   position: absolute;
-  background: #f4f4f1;
-  border: 1px solid #e4e2dc;
-}
-
-.front,
-.back {
   inset: 0;
-  border-radius: 22px;
+  opacity: 0;
+  transition: opacity 0.6s ease;
 }
 
-.front {
-  transform: translateZ(18px);
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  box-sizing: border-box;
+.host.ready {
+  opacity: 1;
 }
 
-.back {
-  transform: rotateY(180deg) translateZ(18px);
-}
-
-.left,
-.right {
-  width: 36px;
-  height: 188px;
-  top: 0;
-  left: 142px;
-}
-
-.left {
-  transform: rotateY(-90deg) translateZ(160px);
-}
-
-.right {
-  transform: rotateY(90deg) translateZ(160px);
-}
-
-.top,
-.bottom {
-  width: 320px;
-  height: 36px;
-  left: 0;
-  top: 76px;
-}
-
-.top {
-  transform: rotateX(90deg) translateZ(94px);
-}
-
-.bottom {
-  transform: rotateX(-90deg) translateZ(94px);
-}
-
-.screen {
-  width: 168px;
-  height: 148px;
-  flex: none;
-  border-radius: 8px;
-  background: #111;
-  display: grid;
-  place-items: center;
-  padding: 8px;
-  box-sizing: border-box;
-}
-
-.screen img {
-  width: 72px;
-  height: 72px;
-  background: #fff;
-  border-radius: 8px;
-}
-
-.keys {
-  display: grid;
-  grid-template-columns: 46px 46px;
-  gap: 12px;
-}
-
-.keys span {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 16%);
-}
-
-.pink {
-  background: #f3a0c4;
-}
-
-.orange {
-  background: #f29a3a;
-}
-
-.red {
-  background: #e23d3d;
-}
-
-.green {
-  background: #3cbf6a;
-}
-
-.mic {
-  position: absolute;
-  right: 18px;
-  bottom: 22px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #2a2a28;
+.host :deep(.dm-canvas) {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 </style>
