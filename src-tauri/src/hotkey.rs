@@ -56,6 +56,13 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
         tauri_plugin_global_shortcut::Builder::new()
             .with_handler(|app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
+                    // Cham phim gia 0xE8 ngay khi Alt con giu: lan nha Alt sau do
+                    // khong bi Windows coi la 'bam Alt don' (mo thanh menu, nuot Ctrl+C).
+                    #[cfg(windows)]
+                    send_inputs(&[
+                        (windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(0xE8), false),
+                        (windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(0xE8), true),
+                    ]);
                     on_pressed(app);
                 }
             })
@@ -577,9 +584,9 @@ fn send_copy() {
     for code in 0x70u16..=0x7Bu16 {
         held.push(VIRTUAL_KEY(code));
     }
-    // Cho nguoi dung nha phim tat (toi da 600ms) de khong phai gia lap nha Alt.
+    // Cho nguoi dung nha phim tat (toi da 150ms) de khong phai gia lap nha Alt.
     let started = Instant::now();
-    while started.elapsed() < Duration::from_millis(600)
+    while started.elapsed() < Duration::from_millis(150)
         && held.iter().any(|vk| unsafe { GetAsyncKeyState(vk.0 as i32) } < 0)
     {
         std::thread::sleep(Duration::from_millis(10));
