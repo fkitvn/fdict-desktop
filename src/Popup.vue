@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import SpeakButton from "./SpeakButton.vue";
 import { speak, stopSpeak } from "./speak.js";
 
@@ -135,6 +136,15 @@ async function openApp() {
   }
 }
 
+async function closePopup() {
+  stopSpeak();
+  try {
+    await getCurrentWindow().hide();
+  } catch {
+    /* Khong an duoc cua so. */
+  }
+}
+
 async function toggleSave() {
   const enabled = !autoAdd.value;
   try {
@@ -189,6 +199,18 @@ onBeforeUnmount(() => {
         <span v-if="hint" class="hint" aria-hidden="true">{{ hint }}</span>
         <kbd v-else aria-hidden="true">Enter</kbd>
       </form>
+      <button
+        type="button"
+        class="close"
+        data-tauri-drag-region="false"
+        aria-label="Đóng"
+        title="Đóng"
+        @click.stop="closePopup"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+        </svg>
+      </button>
     </header>
     <p v-if="notice" class="notice">{{ notice }}</p>
 
@@ -325,6 +347,32 @@ header {
   padding: 0 14px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   user-select: none;
+}
+
+.close {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  margin: 0 -6px 0 8px;
+  padding: 0;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.close svg {
+  pointer-events: none;
+}
+
+.close:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .query {

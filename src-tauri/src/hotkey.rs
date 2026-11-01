@@ -577,7 +577,18 @@ fn send_copy() {
     for code in 0x70u16..=0x7Bu16 {
         held.push(VIRTUAL_KEY(code));
     }
+    // Cho nguoi dung nha phim tat (toi da 600ms) de khong phai gia lap nha Alt.
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_millis(600)
+        && held.iter().any(|vk| unsafe { GetAsyncKeyState(vk.0 as i32) } < 0)
+    {
+        std::thread::sleep(Duration::from_millis(10));
+    }
     let mut keys = Vec::new();
+    // Phim gia 0xE8 (khong gan) chen truoc khi nha Alt: tranh Windows coi la
+    // 'bam Alt don' va kich hoat thanh menu, lam Ctrl+C lan sau bi nuot.
+    keys.push((VIRTUAL_KEY(0xE8), false));
+    keys.push((VIRTUAL_KEY(0xE8), true));
     for vk in held {
         if unsafe { GetAsyncKeyState(vk.0 as i32) } < 0 {
             keys.push((vk, true));
