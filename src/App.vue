@@ -233,7 +233,8 @@ async function signOut() {
   <main class="shell">
     <aside>
       <div class="brand">
-        <img class="logo" src="/logo-full.svg" alt="FDict" />
+        <span class="logo-wrap"><img class="logo" src="/logo-full.svg" alt="" /></span>
+        <span class="brand-name">FDict <span class="brand-sub">Desktop</span></span>
         <span v-if="isDev" class="dev-tag">Dev</span>
       </div>
       <nav>
@@ -447,17 +448,49 @@ aside {
 
 .brand {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 4px 0 6px;
+}
+
+.logo-wrap {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
 }
 
 .logo {
-  width: 72px;
-  height: 72px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: scale(1.35);
+}
+
+.brand-name {
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-sub {
+  font-weight: 500;
+  opacity: 0.6;
 }
 
 .dev-tag {
-  margin-top: 6px;
+  flex: none;
+  margin-top: 0;
   padding: 2px 7px;
   border-radius: 6px;
   background: var(--accent);
