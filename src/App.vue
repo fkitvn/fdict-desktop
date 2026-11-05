@@ -250,7 +250,7 @@ async function signOut() {
           :class="{ on: screen === 'words' }"
           @click="screen = 'words'"
         >
-          Danh sách
+          Bộ sưu tập
         </button>
         <button
           v-if="view.phase === 'welcome'"
