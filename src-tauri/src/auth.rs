@@ -222,6 +222,21 @@ pub(crate) async fn post_json(url: &str, body: Value, token: Option<&str>) -> Re
     Ok((status, payload))
 }
 
+pub(crate) async fn delete_json(url: &str, token: Option<&str>) -> Result<(reqwest::StatusCode, Value), String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|_| "Không mở được kết nối mạng.".to_string())?;
+    let mut request = client.delete(url);
+    if let Some(token) = token.filter(|value| !value.is_empty()) {
+        request = request.header(reqwest::header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    let response = request.send().await.map_err(|_| "Chưa kết nối được máy chủ.".to_string())?;
+    let status = response.status();
+    let payload = response.json::<Value>().await.unwrap_or(Value::Null);
+    Ok((status, payload))
+}
+
 pub(crate) async fn get_json(url: &str, token: Option<&str>) -> Result<(reqwest::StatusCode, Value), String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))

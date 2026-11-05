@@ -187,11 +187,11 @@ async function submitDialog() {
       dialog.value = null;
       await loadCollections();
     } else if (kind === "delete" && targetId) {
-      const def = collections.value.find((c) => c.isDefault);
       await invoke("vocab_collection_delete", {
         id: targetId,
-        moveTo: def?.id || null,
+        moveTo: null,
       });
+      if (lastCollectionId.value === targetId) lastCollectionId.value = "";
       dialog.value = null;
       if (openId.value === targetId) backToList();
       else await loadCollections();
@@ -340,7 +340,6 @@ onMounted(async () => {
           <div class="row-actions">
             <button type="button" class="text" @click.stop="openDialog('rename', col)">Đổi tên</button>
             <button
-              v-if="!col.isDefault"
               type="button"
               class="text danger"
               @click.stop="openDialog('delete', col)"
@@ -361,7 +360,6 @@ onMounted(async () => {
             <div class="choices">
               <button type="button" class="text" @click="openDialog('rename', current)">Đổi tên</button>
               <button
-                v-if="!current.isDefault"
                 type="button"
                 class="text danger"
                 @click="openDialog('delete', current)"
@@ -479,8 +477,8 @@ onMounted(async () => {
                 : "Xóa bộ sưu tập"
           }}
         </h3>
-        <p v-if="dialog.kind === 'delete'" class="sub">
-          Xóa “{{ dialog.col?.name }}”? Các từ sẽ chuyển sang bộ mặc định.
+        <p v-if="dialog.kind === 'delete'" class="sub danger-copy">
+          Xóa bộ “{{ dialog.col?.name }}” ({{ dialog.col?.wordCount || 0 }} từ)? Toàn bộ từ trong bộ sẽ bị xóa. Hành động này không hoàn tác.
         </p>
         <input
           v-if="dialog.kind !== 'delete'"
@@ -714,6 +712,10 @@ onMounted(async () => {
 
 .words .text.danger,
 .words .remove {
+  color: #d14b4b;
+}
+
+.words .danger-copy {
   color: #d14b4b;
 }
 

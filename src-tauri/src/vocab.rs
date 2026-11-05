@@ -268,18 +268,20 @@ pub async fn vocab_collection_delete(
         return Err("Không xóa được bộ này.".into());
     }
     let token = crate::auth::bearer_token(&app).ok_or("Hãy đăng nhập để xóa bộ.")?;
-    let mut payload = json!({ "id": id });
+    let mut url = format!(
+        "{}/api/words/collections/{}",
+        crate::env::dict_origin(&app),
+        urlencoding_encode(&id)
+    );
     if let Some(target) = move_to.map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
-        payload["move_to"] = json!(target);
+        url.push_str(&format!("?move_to={}", urlencoding_encode(&target)));
     }
-    let (status, body) = crate::auth::post_json(
-        &format!("{}/api/words/collections/delete", crate::env::dict_origin(&app)),
-        payload,
-        Some(&token),
-    )
-    .await?;
+    let (status, body) = crate::auth::delete_json(&url, Some(&token)).await?;
     if status.as_u16() == 401 {
         return Err("Hãy đăng nhập lại để xóa bộ.".into());
+    }
+    if status.as_u16() == 404 {
+        return Err(api_error(&body, "Không tìm thấy bộ sưu tập."));
     }
     if !status.is_success() {
         return Err(api_error(&body, "Chưa xóa được bộ sưu tập."));
