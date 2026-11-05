@@ -17,9 +17,6 @@ const update = ref(null);
 const updateMessage = ref("");
 const updating = ref(false);
 const autoUpdate = ref(true);
-const rememberLastCollection = ref(true);
-const rememberMessage = ref("");
-
 let stopUpdate = null;
 
 function invokeError(error) {
@@ -51,18 +48,6 @@ async function toggleAutoUpdate() {
     return;
   }
   if (autoUpdate.value && update.value?.available) installUpdate();
-}
-async function toggleRememberLastCollection() {
-  const enabled = !rememberLastCollection.value;
-  rememberMessage.value = "";
-  try {
-    rememberLastCollection.value = !!(
-      await invoke("vocab_set", { rememberLastCollection: enabled })
-    ).rememberLastCollection;
-  } catch (error) {
-    rememberMessage.value =
-      typeof error === "string" && error.trim() ? error : "Không lưu được lựa chọn.";
-  }
 }
 async function installUpdate() {
   if (updating.value || !update.value?.available) return;
@@ -147,11 +132,6 @@ onMounted(async () => {
     autoUpdate.value = true;
   }
   try {
-    rememberLastCollection.value = !!(await invoke("vocab_snapshot")).rememberLastCollection;
-  } catch {
-    rememberLastCollection.value = true;
-  }
-  try {
     stopUpdate = await listen("update", (event) => {
       if (event.payload?.phase === "installing") updating.value = true;
     });
@@ -210,22 +190,6 @@ onBeforeUnmount(() => {
     </article>
 
 
-    <article class="setting">
-      <div>
-        <h2>Ghi nhớ bộ sưu tập chọn lần cuối</h2>
-        <p>Khi lưu nhanh từ vựng, dùng lại bộ sưu tập bạn chọn lần trước.</p>
-        <p v-if="rememberMessage" class="note">{{ rememberMessage }}</p>
-      </div>
-      <button
-        type="button"
-        class="switch"
-        :class="{ on: rememberLastCollection }"
-        aria-label="Ghi nhớ bộ sưu tập chọn lần cuối"
-        @click="toggleRememberLastCollection"
-      >
-        <span class="switch-knob"></span>
-      </button>
-    </article>
     <article class="setting">
       <div>
         <h2>Phiên bản</h2>

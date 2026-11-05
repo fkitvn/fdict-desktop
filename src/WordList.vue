@@ -35,7 +35,6 @@ const draftEn = ref("");
 const draftVi = ref("");
 const dialog = ref(null);
 const nameInput = ref("");
-const rememberLast = ref(true);
 const lastCollectionId = ref("");
 
 const current = computed(() => collections.value.find((c) => c.id === openId.value) || null);
@@ -86,15 +85,14 @@ function statusClass(status) {
 async function loadSettings() {
   try {
     const snap = await invoke("vocab_snapshot");
-    rememberLast.value = !!snap.rememberLastCollection;
     lastCollectionId.value = snap.lastCollectionId || "";
   } catch {
-    rememberLast.value = true;
+    /* giữ mặc định */
   }
 }
 
 async function rememberCollection(id) {
-  if (!rememberLast.value || !id) return;
+  if (!id) return;
   lastCollectionId.value = id;
   try {
     await invoke("vocab_set", { lastCollectionId: id });
@@ -306,11 +304,11 @@ onMounted(async () => {
   <section class="words">
     <template v-if="!current">
       <header class="head">
-        <div>
+        <div class="title-block">
           <h2>Bộ sưu tập</h2>
           <p class="sub">{{ totalWords }} từ · {{ collections.length }} bộ</p>
         </div>
-        <button type="button" class="primary" @click="openDialog('create')">Tạo bộ</button>
+        <button type="button" class="primary create-btn" @click="openDialog('create')">Tạo bộ</button>
       </header>
 
       <div class="toolbar">
@@ -355,22 +353,24 @@ onMounted(async () => {
     </template>
 
     <template v-else>
-      <header class="head">
-        <div class="title-row">
+      <header class="head detail-head">
+        <div class="title-block">
           <button type="button" class="text back" @click="backToList">← Bộ sưu tập</button>
-          <h2>{{ current.name }}</h2>
+          <div class="title-line">
+            <h2>{{ current.name }}</h2>
+            <div class="choices">
+              <button type="button" class="text" @click="openDialog('rename', current)">Đổi tên</button>
+              <button
+                v-if="!current.isDefault"
+                type="button"
+                class="text danger"
+                @click="openDialog('delete', current)"
+              >
+                Xóa bộ
+              </button>
+            </div>
+          </div>
           <p class="sub">{{ current.wordCount || filteredWords.length }} từ</p>
-        </div>
-        <div class="choices">
-          <button type="button" class="text" @click="openDialog('rename', current)">Đổi tên</button>
-          <button
-            v-if="!current.isDefault"
-            type="button"
-            class="text danger"
-            @click="openDialog('delete', current)"
-          >
-            Xóa bộ
-          </button>
         </div>
       </header>
 
@@ -514,13 +514,35 @@ onMounted(async () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: auto;
 }
 
 .words .head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.words .title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.words .title-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.words .head .create-btn,
+.words button.primary.create-btn {
+  width: auto;
+  flex: none;
+  margin-top: 0;
+  white-space: nowrap;
+  padding: 10px 16px;
 }
 
 .words h2 {
@@ -528,6 +550,9 @@ onMounted(async () => {
   font-size: 32px;
   font-weight: 650;
   letter-spacing: -0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .words .sub {
@@ -536,15 +561,19 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-.words .title-row .back {
+.words .detail-head .back {
   display: inline-block;
-  margin-bottom: 8px;
+  margin: 0 0 8px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--accent);
   font: inherit;
   cursor: pointer;
+}
+
+.words .detail-head .choices .text {
+  white-space: nowrap;
 }
 
 .words .toolbar {
@@ -595,16 +624,15 @@ onMounted(async () => {
   list-style: none;
   margin: 16px 0 0;
   padding: 0;
-  overflow: auto;
+  overflow: visible;
   min-height: 0;
-  flex: 1;
+  flex: none;
 }
 
 .words .collections li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+  display: flex;
   align-items: center;
+  gap: 8px;
   padding: 8px 0;
   border-top: 1px solid var(--border);
 }
@@ -613,7 +641,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   margin: 0;
   padding: 10px 12px;
   border: 1px solid transparent;
@@ -659,6 +689,18 @@ onMounted(async () => {
   color: var(--muted);
 }
 
+.words .chev {
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.words .row-actions {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
 .words .row-actions .text,
 .words .text {
   margin: 0;
@@ -677,11 +719,20 @@ onMounted(async () => {
 
 .words .split {
   margin-top: 12px;
-  flex: 1;
+  flex: none;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.9fr);
+  display: flex;
+  flex-direction: column;
   gap: 16px;
+}
+
+.words .split .word-list {
+  width: 100%;
+}
+
+.words .split .detail {
+  width: 100%;
+  position: static;
 }
 
 .words .word-list li {
@@ -878,11 +929,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 820px) {
-  .words .split {
-    grid-template-columns: 1fr;
+  .words .head {
+    align-items: flex-start;
   }
-  .words .detail {
-    position: static;
+  .words .title-line {
+    flex-wrap: wrap;
   }
 }
 </style>

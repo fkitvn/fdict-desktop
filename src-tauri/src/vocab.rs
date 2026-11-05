@@ -66,9 +66,9 @@ pub fn vocab_set(
     if let Some(v) = auto_add {
         saved.auto_add = v;
     }
-    if let Some(v) = remember_last_collection {
-        saved.remember_last_collection = v;
-    }
+    // Ghi nhớ bộ lần cuối luôn bật.
+    let _ = remember_last_collection;
+    saved.remember_last_collection = true;
     if let Some(id) = last_collection_id {
         saved.last_collection_id = id.trim().to_string();
     }
@@ -407,10 +407,13 @@ pub async fn save_pair(
         return ("error".into(), "Không lưu được câu này.".into(), String::new());
     }
 
-    let saved = load(app);
+    let collection_id = match resolve_save_collection_id(app, &token).await {
+        Ok(id) => id,
+        Err(message) => return ("error".into(), message, String::new()),
+    };
     let mut payload = json!({ "en": en, "vi": vi, "word": word, "ipa": ipa, "pos": pos });
-    if saved.remember_last_collection && !saved.last_collection_id.trim().is_empty() {
-        payload["collection_id"] = json!(saved.last_collection_id.trim());
+    if !collection_id.is_empty() {
+        payload["collection_id"] = json!(collection_id);
     }
 
     match crate::auth::post_json(
@@ -451,9 +454,6 @@ fn maybe_remember(app: &AppHandle, collection_id: &str) {
         return;
     }
     let mut saved = load(app);
-    if !saved.remember_last_collection {
-        return;
-    }
     if saved.last_collection_id == id {
         return;
     }
@@ -461,10 +461,88 @@ fn maybe_remember(app: &AppHandle, collection_id: &str) {
     let _ = save(app, &saved);
 }
 
+const DEFAULT_COLLECTION_NAME: &str = "Từ vựng của tôi";
+
+async fn fetch_collections(app: &AppHandle, token: &str) -> Result<Vec<VocabCollection>, String> {
+    let (status, body) = crate::auth::get_json(
+        &format!("{}/api/words/collections", crate::env::dict_origin(app)),
+        Some(token),
+    )
+    .await?;
+    if status.as_u16() == 401 {
+        return Err("Hãy đăng nhập lại để lưu từ.".into());
+    }
+    if !status.is_success() {
+        return Err(api_error(&body, "Chưa tải được bộ sưu tập."));
+    }
+    Ok(body
+        .get("collections")
+        .and_then(|v| v.as_array())
+        .map(|items| items.iter().filter_map(map_collection).collect())
+        .unwrap_or_default())
+}
+
+async fn create_named_collection(
+    app: &AppHandle,
+    token: &str,
+    name: &str,
+) -> Result<VocabCollection, String> {
+    let (status, body) = crate::auth::post_json(
+        &format!("{}/api/words/collections/create", crate::env::dict_origin(app)),
+        json!({ "name": name }),
+        Some(token),
+    )
+    .await?;
+    if status.as_u16() == 401 {
+        return Err("Hãy đăng nhập lại để lưu từ.".into());
+    }
+    if status.as_u16() == 409 {
+        // Tên đã có — tải lại danh sách và dùng bộ trùng tên nếu có.
+        let cols = fetch_collections(app, token).await?;
+        if let Some(existing) = cols
+            .into_iter()
+            .find(|c| c.name.eq_ignore_ascii_case(name))
+        {
+            return Ok(existing);
+        }
+        return Err("Tên bộ sưu tập đã tồn tại.".into());
+    }
+    if !status.is_success() {
+        return Err(api_error(&body, "Chưa tạo được bộ sưu tập."));
+    }
+    let col = body.get("collection").ok_or("Chưa tạo được bộ sưu tập.")?;
+    map_collection(col).ok_or_else(|| "Chưa tạo được bộ sưu tập.".into())
+}
+
+/// 0 bộ → tạo mặc định; 1 bộ → dùng bộ đó; ≥2 → ưu tiên last-used còn tồn tại.
+async fn resolve_save_collection_id(app: &AppHandle, token: &str) -> Result<String, String> {
+    let mut cols = fetch_collections(app, token).await?;
+    if cols.is_empty() {
+        let created = create_named_collection(app, token, DEFAULT_COLLECTION_NAME).await?;
+        maybe_remember(app, &created.id);
+        return Ok(created.id);
+    }
+    if cols.len() == 1 {
+        let id = cols.remove(0).id;
+        maybe_remember(app, &id);
+        return Ok(id);
+    }
+    let last = load(app).last_collection_id;
+    if !last.trim().is_empty() {
+        if let Some(hit) = cols.iter().find(|c| c.id == last) {
+            return Ok(hit.id.clone());
+        }
+    }
+    if let Some(def) = cols.iter().find(|c| c.is_default) {
+        return Ok(def.id.clone());
+    }
+    Ok(cols[0].id.clone())
+}
+
 fn view(saved: &SavedVocab) -> VocabView {
     VocabView {
         auto_add: saved.auto_add,
-        remember_last_collection: saved.remember_last_collection,
+        remember_last_collection: true,
         last_collection_id: saved.last_collection_id.clone(),
     }
 }
