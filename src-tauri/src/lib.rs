@@ -8,6 +8,7 @@ mod popup;
 mod tray;
 mod update;
 mod vocab;
+mod zalo;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -50,6 +51,8 @@ pub fn run() {
             update::update_auto_snapshot,
             update::update_auto_set,
             device::device_list,
+            zalo::zalo_status,
+            zalo::zalo_unlink,
             popup::open_app,
             piper::piper_speak,
             piper::piper_stop

@@ -1,8 +1,63 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { setTheme, themePreference } from "./theme.js";
+
+const props = defineProps({ signedIn: Boolean, accountKey: { type: String, default: "" } });
+const zalo = ref(null);
+const zaloBusy = ref(false);
+const zaloMessage = ref("");
+const confirmZalo = ref(false);
+const cancelZalo = ref(null);
+let zaloGeneration = 0;
+let statusTimer = null;
+
+async function loadZalo() {
+  if (!props.signedIn || zaloBusy.value) return;
+  const generation = ++zaloGeneration;
+  zaloBusy.value = true;
+  try {
+    const result = await invoke("zalo_status");
+    if (generation !== zaloGeneration) return;
+    zalo.value = result;
+    zaloMessage.value = "";
+  } catch (error) {
+    if (generation !== zaloGeneration) return;
+    zalo.value = null;
+    zaloMessage.value = invokeError(error);
+  } finally {
+    if (generation === zaloGeneration) zaloBusy.value = false;
+  }
+}
+async function askUnlinkZalo() {
+  confirmZalo.value = true;
+  await nextTick();
+  cancelZalo.value?.focus();
+}
+async function unlinkZalo() {
+  if (!confirmZalo.value || zaloBusy.value || !props.signedIn) return;
+  confirmZalo.value = false;
+  const generation = ++zaloGeneration;
+  zaloBusy.value = true;
+  zaloMessage.value = "";
+  try {
+    const result = await invoke("zalo_unlink", { confirm: true });
+    if (generation === zaloGeneration) zalo.value = result;
+  } catch (error) {
+    if (generation === zaloGeneration) zaloMessage.value = invokeError(error);
+  } finally {
+    if (generation === zaloGeneration) zaloBusy.value = false;
+  }
+}
+watch(() => [props.signedIn, props.accountKey], () => {
+  ++zaloGeneration;
+  zalo.value = null;
+  zaloBusy.value = false;
+  zaloMessage.value = "";
+  confirmZalo.value = false;
+  loadZalo();
+}, { immediate: true });
 
 const theme = ref("system");
 const themes = [
@@ -119,6 +174,7 @@ function stopCapture() {
 }
 
 onMounted(async () => {
+  statusTimer = setInterval(() => { if (!confirmZalo.value) loadZalo(); }, 15000);
   theme.value = themePreference();
   try {
     hotkeyLabel.value = (await invoke("hotkey_snapshot")).label;
@@ -142,6 +198,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  ++zaloGeneration;
+  if (statusTimer) clearInterval(statusTimer);
   if (stopUpdate) stopUpdate();
   window.removeEventListener("keydown", onHotkeyKeydown, true);
   window.removeEventListener("blur", onWindowBlur);
@@ -152,6 +210,32 @@ onBeforeUnmount(() => {
 <template>
   <section class="settings">
     <h1>Cài đặt</h1>
+
+    <article class="setting" v-if="props.signedIn">
+      <div>
+        <h2>Liên kết Zalo</h2>
+        <p v-if="zalo?.linked">Đã liên kết Zalo<span v-if="zalo.displayName"> · {{ zalo.displayName }}</span></p>
+        <p v-else-if="zalo">Chưa liên kết Zalo. Mở Cài đặt &gt; Liên kết Zalo trên thiết bị để lấy mã.</p>
+        <p v-else-if="!zaloMessage">Đang kiểm tra liên kết Zalo...</p>
+        <p v-if="zaloMessage" class="note" role="status">{{ zaloMessage }}</p>
+      </div>
+      <div class="choices">
+        <button v-if="zalo?.linked" type="button" :disabled="zaloBusy" @click="askUnlinkZalo">Gỡ liên kết Zalo</button>
+        <button v-else type="button" :disabled="zaloBusy" @click="loadZalo">Kiểm tra</button>
+      </div>
+    </article>
+
+    <div v-if="confirmZalo" class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="zalo-unlink-title"
+      @click.self="confirmZalo = false" @keydown.esc="confirmZalo = false">
+      <div class="confirm-card">
+        <h2 id="zalo-unlink-title">Gỡ liên kết Zalo?</h2>
+        <p>Zalo sẽ được gỡ khỏi tài khoản FDict trên mọi thiết bị. Bảo hành và phiên đăng nhập không thay đổi.</p>
+        <div class="confirm-actions">
+          <button ref="cancelZalo" type="button" @click="confirmZalo = false">Hủy</button>
+          <button type="button" class="primary" :disabled="zaloBusy" @click="unlinkZalo">Gỡ liên kết</button>
+        </div>
+      </div>
+    </div>
 
     <article class="setting">
       <div>

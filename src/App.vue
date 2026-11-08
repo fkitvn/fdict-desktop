@@ -319,7 +319,7 @@ async function signOut() {
     <section class="content">
       <WordList v-if="screen === 'words' && view.phase === 'welcome'" />
       <Devices v-else-if="screen === 'devices' && view.phase === 'welcome'" />
-      <Settings v-else-if="screen === 'settings'" />
+      <Settings v-else-if="screen === 'settings'" :signed-in="view.phase === 'welcome'" :account-key="view.email" />
       <History
         v-else-if="view.phase === 'welcome'"
         :hotkey-label="hotkeyLabel"
