@@ -137,6 +137,7 @@ fn open_compose(app: &AppHandle, message: &str) {
 }
 
 fn begin_lookup(app: AppHandle, word: String) {
+    let identity = crate::auth::history_identity(&app);
     crate::popup::show(&app);
     let _ = app.emit("lookup", &lookup_loading(&word));
     tauri::async_runtime::spawn(async move {
@@ -154,10 +155,14 @@ fn begin_lookup(app: AppHandle, word: String) {
                 } else {
                     lexicon(&translation).await
                 };
-                crate::history::record(&app, &word, &translation, &direction, &ipa, &pos);
+                // Drop results when login changed during translation.
+                if crate::auth::history_identity(&app) != identity { return; }
+                if let Some((owner, _)) = &identity {
+                    crate::history::record(&app, owner, &word, &translation, &direction, &ipa, &pos);
+                }
                 let ready = lookup_ready(&word, &translation, &direction, "", "", "", &ipa, &pos);
                 let _ = app.emit("lookup", &ready);
-                let (save_status, save_message, word_id) = crate::vocab::save_pair(&app, &word, &translation, &direction, &ipa, &pos).await;
+                let (save_status, save_message, word_id) = crate::vocab::save_pair(&app, identity.as_ref().map(|(_, token)| token.as_str()), &word, &translation, &direction, &ipa, &pos).await;
                 if save_status.is_empty() {
                     return;
                 }
@@ -165,7 +170,9 @@ fn begin_lookup(app: AppHandle, word: String) {
             }
             Err(message) => lookup_message("error", &word, &message),
         };
-        let _ = app.emit("lookup", next);
+        if crate::auth::history_identity(&app) == identity {
+            let _ = app.emit("lookup", next);
+        }
     });
 }
 

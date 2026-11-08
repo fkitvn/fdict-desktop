@@ -161,6 +161,13 @@ pub fn end_session(app: &AppHandle, notice: &str) -> AuthView {
     view
 }
 
+// Stable filesystem namespace: server origin + account ID, never token/email.
+pub(crate) fn history_identity(app: &AppHandle) -> Option<(String, String)> {
+    let session = read_session(app)?;
+    let encode = |value: &str| value.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>();
+    Some((format!("{}/{}", encode(&session.origin), encode(&session.account_id)), session.token))
+}
+
 pub(crate) fn bearer_token(app: &AppHandle) -> Option<String> {
     let session = read_session(app)?;
     let token = session.token.trim().to_string();

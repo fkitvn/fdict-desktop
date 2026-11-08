@@ -388,6 +388,7 @@ pub async fn vocab_remove(app: AppHandle, id: String) -> Result<(), String> {
 
 pub async fn save_pair(
     app: &AppHandle,
+    lookup_token: Option<&str>,
     word: &str,
     translation: &str,
     direction: &str,
@@ -397,7 +398,7 @@ pub async fn save_pair(
     if !load(app).auto_add {
         return (String::new(), String::new(), String::new());
     }
-    let Some(token) = crate::auth::bearer_token(app) else {
+    let Some(token) = lookup_token.map(str::to_owned).filter(|token| crate::auth::bearer_token(app).as_ref() == Some(token)) else {
         return ("error".into(), "Hãy đăng nhập để lưu từ.".into(), String::new());
     };
     let (en, vi) = if direction == "vi-en" {
@@ -413,6 +414,11 @@ pub async fn save_pair(
         Ok(id) => id,
         Err(message) => return ("error".into(), message, String::new()),
     };
+    // Collection resolution may await several requests. Do not start a word upload
+    // after logout/switch; requests already sent still carry only the original token.
+    if crate::auth::bearer_token(app).as_deref() != Some(token.as_str()) {
+        return (String::new(), String::new(), String::new());
+    }
     let mut payload = json!({ "en": en, "vi": vi, "word": word, "ipa": ipa, "pos": pos });
     if !collection_id.is_empty() {
         payload["collection_id"] = json!(collection_id);
@@ -441,7 +447,7 @@ pub async fn save_pair(
                 .trim()
                 .to_string();
             if let Some(cid) = body.get("collection_id").and_then(|v| v.as_str()) {
-                maybe_remember(app, cid);
+                if crate::auth::bearer_token(app).as_deref() == Some(token.as_str()) { maybe_remember(app, cid); }
             }
             ("saved".into(), message.into(), id)
         }
@@ -521,12 +527,12 @@ async fn resolve_save_collection_id(app: &AppHandle, token: &str) -> Result<Stri
     let mut cols = fetch_collections(app, token).await?;
     if cols.is_empty() {
         let created = create_named_collection(app, token, DEFAULT_COLLECTION_NAME).await?;
-        maybe_remember(app, &created.id);
+        if crate::auth::bearer_token(app).as_deref() == Some(token) { maybe_remember(app, &created.id); }
         return Ok(created.id);
     }
     if cols.len() == 1 {
         let id = cols.remove(0).id;
-        maybe_remember(app, &id);
+        if crate::auth::bearer_token(app).as_deref() == Some(token) { maybe_remember(app, &id); }
         return Ok(id);
     }
     let last = load(app).last_collection_id;

@@ -25,46 +25,38 @@ function directionLabel(direction) {
   return "";
 }
 
-function applyLookup(payload) {
-  if (!payload?.word) return;
-  if (payload.status === "loading") {
-    pending.value = payload.word;
-    return;
+let active = true;
+let requestId = 0;
+async function refreshHistory() {
+  const id = ++requestId;
+  try {
+    const next = await invoke("history_list");
+    if (active && id === requestId) items.value = next;
+  } catch {
+    if (active && id === requestId) items.value = [];
+  } finally {
+    if (active && id === requestId) loading.value = false;
   }
-  if (payload.status !== "ready" || !payload.translation) {
-    if (pending.value === payload.word) pending.value = "";
-    return;
-  }
-  pending.value = "";
-  const next = {
-    word: payload.word,
-    translation: payload.translation,
-    direction: payload.direction || "",
-    ipa: payload.ipa || "",
-    pos: payload.pos || "",
-  };
-  const key = next.word.toLowerCase();
-  items.value = [next, ...items.value.filter((item) => item.word.toLowerCase() !== key)].slice(0, 100);
 }
 
 onMounted(async () => {
   try {
-    items.value = await invoke("history_list");
-  } catch {
-    items.value = [];
-  } finally {
-    loading.value = false;
-  }
-  try {
-    stopLookup = await listen("lookup", (event) => applyLookup(event.payload));
-  } catch {
-    stopLookup = null;
-  }
+    const stop = await listen("lookup", (event) => {
+      // Global events may belong to guests/old sessions: read only owned backend history.
+      if (event.payload?.status === "ready") refreshHistory();
+    });
+    if (!active) stop();
+    else stopLookup = stop;
+  } catch { stopLookup = null; }
+  if (active) await refreshHistory();
 });
-
 onBeforeUnmount(() => {
+  active = false;
+  ++requestId;
+  items.value = [];
   if (stopLookup) stopLookup();
 });
+
 </script>
 
 <template>

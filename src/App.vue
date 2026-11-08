@@ -317,11 +317,12 @@ async function signOut() {
     </aside>
 
     <section class="content">
-      <WordList v-if="screen === 'words' && view.phase === 'welcome'" />
+      <WordList v-if="screen === 'words' && view.phase === 'welcome'" :key="view.email" />
       <Devices v-else-if="screen === 'devices' && view.phase === 'welcome'" />
       <Settings v-else-if="screen === 'settings'" :signed-in="view.phase === 'welcome'" :account-key="view.email" />
       <History
         v-else-if="view.phase === 'welcome'"
+        :key="view.email"
         :hotkey-label="hotkeyLabel"
       />
 
