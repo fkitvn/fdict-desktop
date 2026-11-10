@@ -56,6 +56,14 @@ fn active_name() -> String {
 }
 
 fn profile(name: &str) -> Profile {
+    // Lab: may chu dev chay tren may Bio, mo ra ngoai qua Cloudflare Tunnel (xem DEV.md).
+    if name == "lab" {
+        return Profile {
+            name: name.into(),
+            auth: "https://fkit-dev.joinnow.vn".into(),
+            dict: "https://fdict-dev.joinnow.vn".into(),
+        };
+    }
     let raw = if name == "production" { PROD_FILE } else { DEV_FILE };
     let (mut auth, mut dict) = parse(raw);
     if name == "production" {
@@ -84,6 +92,7 @@ fn canonical(name: &str) -> Option<String> {
     match name.trim().to_lowercase().as_str() {
         "development" | "dev" => Some("development".into()),
         "production" | "prod" => Some("production".into()),
+        "lab" => Some("lab".into()),
         _ => None,
     }
 }
