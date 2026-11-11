@@ -56,7 +56,7 @@ fn active_name() -> String {
 }
 
 fn profile(name: &str) -> Profile {
-    // Lab: may chu dev chay tren may Bio, mo ra ngoai qua Cloudflare Tunnel (xem DEV.md).
+    // Lab: may chu dev chay tren may Bio, mo ra ngoai qua Cloudflare Tunnel (xem README.md, muc Lab).
     if name == "lab" {
         return Profile {
             name: name.into(),

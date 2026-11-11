@@ -15,6 +15,22 @@ yarn tauri dev
 
 Debug builds talk to `http://127.0.0.1:8000` and `http://127.0.0.1:8001`. Release builds talk to `https://fkit.vn` and `https://dict.fkit.vn`.
 
+### Lab
+
+A Lab build talks to `https://fkit-dev.joinnow.vn` and `https://fdict-dev.joinnow.vn`. Set `FDICT_BUILD_ENV=lab` at compile time. Do not publish or release a Lab build.
+
+```powershell
+$env:FDICT_BUILD_ENV = "lab"
+yarn tauri dev
+```
+
+To build the side-by-side `FDict Dev` installer locally (do not publish):
+
+```powershell
+$env:FDICT_BUILD_ENV = "lab"
+yarn tauri build --bundles nsis --config src-tauri/tauri.dev.conf.json
+```
+
 ## Build
 
 Production installer (`FDict`):
@@ -23,7 +39,7 @@ Production installer (`FDict`):
 yarn tauri build --bundles nsis
 ```
 
-Output: `src-tauri\target\release\bundle\nsis\FDict_0.1.0_x64-setup.exe`
+Output: `src-tauri\target\release\bundle\nsis\FDict_1.0.14_x64-setup.exe`
 
 Development installer (`FDict Dev`, installs beside production):
 
@@ -38,4 +54,3 @@ Contributors open a branch and a pull request into `prod`. Merging `prod` publis
 `yarn version:set 1.0.4` writes that version into the three version files. GitHub Actions then builds the installer and records the download link.
 
 A merge that does not change the version does not build a new installer.
-
