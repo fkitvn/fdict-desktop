@@ -1,4 +1,5 @@
 mod auth;
+mod autostart;
 mod device;
 mod env;
 mod history;
@@ -8,7 +9,6 @@ mod popup;
 mod tray;
 mod update;
 mod vocab;
-mod zalo;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,12 +16,19 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             crate::tray::show_main(app);
         }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             tray::install(app)?;
             popup::install(app)?;
             hotkey::install(app)?;
             update::start_auto(app.handle());
+            crate::autostart::apply(app.handle());
+            crate::autostart::hide_if_launched_at_login(app.handle());
+            crate::auth::start_presence(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -50,9 +57,9 @@ pub fn run() {
             update::update_install,
             update::update_auto_snapshot,
             update::update_auto_set,
+            autostart::autostart_snapshot,
+            autostart::autostart_set,
             device::device_list,
-            zalo::zalo_status,
-            zalo::zalo_unlink,
             popup::open_app,
             piper::piper_speak,
             piper::piper_stop

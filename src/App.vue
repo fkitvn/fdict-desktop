@@ -347,7 +347,7 @@ async function signOut() {
           v-model="email"
           type="email"
           autocomplete="email"
-          placeholder="thudientucuaban@email.com"
+          placeholder="emailcuaban@example.com"
           required
         />
         <button class="primary" type="submit" :disabled="busy">
