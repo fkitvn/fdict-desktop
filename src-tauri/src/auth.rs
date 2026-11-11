@@ -88,7 +88,7 @@ pub async fn auth_verify_otp(app: AppHandle, email: String, otp: String) -> Resu
 
     let (status, body) = post_json(
         &format!("{}/api/auth/verify-otp", crate::env::auth_origin(&app)),
-        json!({ "email": email, "otp": otp }),
+        with_desktop(&app, json!({ "email": email, "otp": otp })),
         None,
     )
     .await?;
@@ -119,7 +119,7 @@ pub async fn auth_verify_otp(app: AppHandle, email: String, otp: String) -> Resu
 
     match post_json(
         &format!("{}/api/auth/detail-session", crate::env::auth_origin(&app)),
-        json!({}),
+        with_desktop(&app, json!({})),
         Some(&session.token),
     )
     .await
@@ -270,6 +270,101 @@ fn api_message(body: &Value, fallback: &str) -> String {
         .to_string()
 }
 
+
+fn desktop_payload(app: &AppHandle) -> Value {
+    serde_json::json!({
+        "installId": install_id(app),
+        "appVersion": env!("CARGO_PKG_VERSION"),
+        "os": format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
+        "hostname": hostname(),
+    })
+}
+
+fn with_desktop(app: &AppHandle, mut body: Value) -> Value {
+    if let Some(obj) = body.as_object_mut() {
+        obj.insert("desktop".into(), desktop_payload(app));
+    }
+    body
+}
+
+const INSTALL_ID_MIN: usize = 16;
+const INSTALL_ID_MAX: usize = 80;
+
+fn install_id(app: &AppHandle) -> String {
+    let mut path = match app.path().app_data_dir() {
+        Ok(dir) => dir,
+        Err(_) => return new_install_id(),
+    };
+    let _ = std::fs::create_dir_all(&path);
+    path.push("install-id.txt");
+    if let Ok(raw) = std::fs::read_to_string(&path) {
+        let id = raw.trim().to_string();
+        if valid_install_id(&id) {
+            return id;
+        }
+    }
+    let id = new_install_id();
+    let _ = std::fs::write(&path, &id);
+    id
+}
+
+fn valid_install_id(id: &str) -> bool {
+    let n = id.len();
+    n >= INSTALL_ID_MIN
+        && n <= INSTALL_ID_MAX
+        && id.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+}
+
+fn new_install_id() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let pid = u128::from(std::process::id());
+    let mix = nanos ^ (pid << 48);
+    format!("{mix:032x}{nanos:032x}")
+}
+
+fn hostname() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_default()
+        .chars()
+        .filter(|ch| ch.is_ascii_graphic() || *ch == ' ')
+        .take(128)
+        .collect()
+}
+
+pub fn start_presence(app: &AppHandle) {
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let _ = tauri::async_runtime::spawn_blocking(|| {
+                std::thread::sleep(std::time::Duration::from_secs(5 * 60));
+            })
+            .await;
+            ping_presence(&handle).await;
+        }
+    });
+}
+
+async fn ping_presence(app: &AppHandle) {
+    let Some(session) = read_session(app) else {
+        return;
+    };
+    match post_json(
+        &format!("{}/api/auth/detail-session", crate::env::auth_origin(app)),
+        with_desktop(app, serde_json::json!({})),
+        Some(&session.token),
+    )
+    .await
+    {
+        Ok((status, _)) if status.as_u16() == 401 => {
+            let _ = session_path(app).map(|path| std::fs::remove_file(path));
+            crate::tray::sync(app);
+        }
+        _ => {}
+    }
+}
+
 fn session_path(app: &AppHandle) -> Result<PathBuf, String> {
     let mut dir = app.path().app_data_dir().map_err(|err| err.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
@@ -296,7 +391,7 @@ async fn load_session(app: &AppHandle) -> Option<SavedSession> {
     let mut session = read_session(app)?;
     match post_json(
         &format!("{}/api/auth/detail-session", crate::env::auth_origin(app)),
-        json!({}),
+        with_desktop(&app, json!({})),
         Some(&session.token),
     )
     .await
