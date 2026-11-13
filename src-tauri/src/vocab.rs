@@ -394,6 +394,8 @@ pub async fn save_pair(
     direction: &str,
     ipa: &str,
     pos: &str,
+    example: &str,
+    example_vi: &str,
 ) -> (String, String, String) {
     if !load(app).auto_add {
         return (String::new(), String::new(), String::new());
@@ -420,6 +422,13 @@ pub async fn save_pair(
         return (String::new(), String::new(), String::new());
     }
     let mut payload = json!({ "en": en, "vi": vi, "word": word, "ipa": ipa, "pos": pos });
+    // Câu ví dụ + nghĩa câu đã do server làm đầy ở /api/words/lookup; server chỉ điền chỗ trống.
+    if !example.trim().is_empty() {
+        payload["example"] = json!(example);
+        if !example_vi.trim().is_empty() {
+            payload["example_vi"] = json!(example_vi);
+        }
+    }
     if !collection_id.is_empty() {
         payload["collection_id"] = json!(collection_id);
     }

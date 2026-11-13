@@ -58,6 +58,10 @@ function apply(payload) {
     wordId: payload.wordId || "",
     ipa: payload.ipa || "",
     pos: payload.pos || "",
+    // Server lam day (khi da dang nhap): cau vi du + nghia ca cau, cau luyen tap.
+    example: payload.example || "",
+    exampleVi: payload.exampleVi || "",
+    sentences: Array.isArray(payload.sentences) ? payload.sentences : [],
   };
   const previous = items.value.find((item) => item.word === next.word);
   const index = items.value.findIndex((item) => item.word === next.word);
@@ -92,6 +96,13 @@ function toggleSpeak() {
   autoSpeak.value = !autoSpeak.value;
   localStorage.setItem("fdict-auto-speak", autoSpeak.value ? "1" : "0");
   if (!autoSpeak.value) stopSpeak();
+}
+
+function extraSentences(item) {
+  const ex = String(item.example || "").trim().toLowerCase();
+  return (item.sentences || []).filter(
+    (s) => s?.en && s.en.trim().toLowerCase() !== ex,
+  );
 }
 
 function englishOf(item) {
@@ -263,6 +274,22 @@ onBeforeUnmount(() => {
           ><span v-if="item.pos && item.ipa"> · </span
           ><i v-if="item.ipa">{{ ipaText(item.ipa) }}</i>
         </p>
+        <div v-if="item.status === 'ready' && item.example" class="example">
+          <p class="ex-en">
+            <span>{{ item.example }}</span>
+            <SpeakButton :text="item.example" />
+          </p>
+          <p v-if="item.exampleVi" class="ex-vi">{{ item.exampleVi }}</p>
+        </div>
+        <div
+          v-if="item.status === 'ready' && extraSentences(item).length"
+          class="sentences"
+        >
+          <div v-for="s in extraSentences(item)" :key="s.en" class="sentence">
+            <p class="ex-en">{{ s.en }}</p>
+            <p v-if="s.vi" class="ex-vi">{{ s.vi }}</p>
+          </div>
+        </div>
         <p
           v-if="item.saveMessage"
           class="save"
@@ -603,6 +630,36 @@ li + li {
 
 .lex i {
   font-style: italic;
+}
+
+.example,
+.sentences {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+.sentence + .sentence {
+  margin-top: 3px;
+}
+
+.ex-en {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.ex-en span {
+  min-width: 0;
+}
+
+.ex-vi {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .mean {
