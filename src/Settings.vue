@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { setTheme, themePreference } from "./theme.js";
@@ -20,6 +20,12 @@ const updateMessage = ref("");
 const updating = ref(false);
 const autoUpdate = ref(true);
 const autostart = ref(true);
+const collections = ref([]);
+const saveCollectionId = ref("");
+const colsLoading = ref(false);
+const colsError = ref("");
+const newCollectionName = ref("");
+const creatingCollection = ref(false);
 let stopUpdate = null;
 
 function invokeError(error) {
@@ -115,6 +121,78 @@ function onWindowBlur() {
   if (capturing.value) stopCapture();
 }
 
+async function loadSaveCollection() {
+  if (!props.signedIn) {
+    collections.value = [];
+    saveCollectionId.value = "";
+    colsError.value = "";
+    colsLoading.value = false;
+    return;
+  }
+  colsLoading.value = true;
+  colsError.value = "";
+  try {
+    const [cols, snap] = await Promise.all([
+      invoke("vocab_collections"),
+      invoke("vocab_snapshot"),
+    ]);
+    collections.value = Array.isArray(cols) ? cols : [];
+    let chosen = String(snap?.saveCollectionId || "").trim();
+    if (chosen && !collections.value.some((c) => c.id === chosen)) {
+      chosen = "";
+      await invoke("vocab_set", { saveCollectionId: "" });
+    }
+    if (!chosen && collections.value.length) {
+      const fallback = collections.value.find((c) => c.isDefault) || collections.value[0];
+      chosen = fallback.id;
+      await invoke("vocab_set", { saveCollectionId: chosen });
+    }
+    saveCollectionId.value = chosen;
+  } catch (error) {
+    collections.value = [];
+    colsError.value = invokeError(error);
+  } finally {
+    colsLoading.value = false;
+  }
+}
+
+async function chooseSaveCollection(event) {
+  const id = String(event.target.value || "").trim();
+  const previous = saveCollectionId.value;
+  saveCollectionId.value = id;
+  try {
+    await invoke("vocab_set", { saveCollectionId: id });
+  } catch (error) {
+    saveCollectionId.value = previous;
+    colsError.value = invokeError(error);
+  }
+}
+
+async function createSaveCollection() {
+  const name = newCollectionName.value.trim();
+  if (!name || creatingCollection.value) return;
+  creatingCollection.value = true;
+  colsError.value = "";
+  try {
+    const created = await invoke("vocab_collection_create", { name });
+    collections.value = [...collections.value, created];
+    saveCollectionId.value = created.id;
+    newCollectionName.value = "";
+    await invoke("vocab_set", { saveCollectionId: created.id });
+  } catch (error) {
+    colsError.value = invokeError(error);
+  } finally {
+    creatingCollection.value = false;
+  }
+}
+
+watch(
+  () => [props.signedIn, props.accountKey],
+  () => {
+    loadSaveCollection();
+  },
+);
+
 async function startCapture() {
   hotkeyMessage.value = "";
   capturing.value = true;
@@ -160,6 +238,7 @@ onMounted(async () => {
     stopUpdate = null;
   }
   checkUpdate();
+  loadSaveCollection();
 });
 
 onBeforeUnmount(() => {
@@ -210,7 +289,37 @@ onBeforeUnmount(() => {
       </div>
     </article>
 
-
+    <article v-if="signedIn" class="setting">
+      <div>
+        <h2>Bộ sưu tập lưu từ</h2>
+        <p>Từ lưu khi tìm kiếm nhanh sẽ vào bộ này.</p>
+        <p v-if="colsLoading">Đang tải bộ sưu tập…</p>
+        <p v-else-if="colsError" class="note">
+          {{ colsError }}
+          <button type="button" class="text" @click="loadSaveCollection">Thử lại</button>
+        </p>
+        <template v-else-if="!collections.length">
+          <p>Bạn chưa có bộ sưu tập nào</p>
+          <form class="create-col" @submit.prevent="createSaveCollection">
+            <input
+              v-model="newCollectionName"
+              type="text"
+              maxlength="60"
+              placeholder="Tên bộ sưu tập"
+              :disabled="creatingCollection"
+            />
+            <button type="submit" :disabled="creatingCollection || !newCollectionName.trim()">
+              {{ creatingCollection ? "…" : "Tạo bộ sưu tập" }}
+            </button>
+          </form>
+        </template>
+      </div>
+      <div v-if="!colsLoading && !colsError && collections.length" class="choices">
+        <select :value="saveCollectionId" aria-label="Bộ sưu tập lưu từ" @change="chooseSaveCollection">
+          <option v-for="col in collections" :key="col.id" :value="col.id">{{ col.name }}</option>
+        </select>
+      </div>
+    </article>
 
     <article class="setting">
       <div>
@@ -336,6 +445,41 @@ onBeforeUnmount(() => {
 .upgrade {
   justify-content: flex-start;
   margin-top: 12px;
+}
+
+.setting .text {
+  margin: 0 0 0 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.create-col {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.create-col input {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.create-col button {
+  margin: 0;
 }
 
 .switch {

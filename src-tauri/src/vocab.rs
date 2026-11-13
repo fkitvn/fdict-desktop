@@ -9,6 +9,7 @@ pub struct VocabView {
     auto_add: bool,
     remember_last_collection: bool,
     last_collection_id: String,
+    save_collection_id: String,
 }
 
 fn default_on() -> bool {
@@ -23,6 +24,8 @@ struct SavedVocab {
     remember_last_collection: bool,
     #[serde(default)]
     last_collection_id: String,
+    #[serde(default)]
+    save_collection_id: String,
 }
 
 #[tauri::command]
@@ -39,6 +42,7 @@ pub struct VocabWord {
     ipa: String,
     pos: String,
     example: String,
+    example_vi: String,
     status: String,
     collection_id: String,
 }
@@ -61,6 +65,7 @@ pub fn vocab_set(
     auto_add: Option<bool>,
     remember_last_collection: Option<bool>,
     last_collection_id: Option<String>,
+    save_collection_id: Option<String>,
 ) -> Result<VocabView, String> {
     let mut saved = load(&app);
     if let Some(v) = auto_add {
@@ -71,6 +76,9 @@ pub fn vocab_set(
     saved.remember_last_collection = true;
     if let Some(id) = last_collection_id {
         saved.last_collection_id = id.trim().to_string();
+    }
+    if let Some(id) = save_collection_id {
+        saved.save_collection_id = id.trim().to_string();
     }
     save(&app, &saved)?;
     Ok(view(&saved))
@@ -107,6 +115,12 @@ fn map_api_word(item: &serde_json::Value) -> Option<VocabWord> {
             .to_string(),
         pos: item.get("pos").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
         example: item.get("example").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
+        example_vi: item
+            .get("example_vi")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string(),
         status: item.get("status").and_then(|v| v.as_str()).unwrap_or("new").trim().to_string(),
         collection_id: item
             .get("collection_id")
@@ -287,8 +301,16 @@ pub async fn vocab_collection_delete(
         return Err(api_error(&body, "Chưa xóa được bộ sưu tập."));
     }
     let mut saved = load(&app);
+    let mut changed = false;
     if saved.last_collection_id == id {
         saved.last_collection_id.clear();
+        changed = true;
+    }
+    if saved.save_collection_id == id {
+        saved.save_collection_id.clear();
+        changed = true;
+    }
+    if changed {
         let _ = save(&app, &saved);
     }
     Ok(())
@@ -332,6 +354,7 @@ pub async fn vocab_update(app: AppHandle, id: String, en: String, vi: String) ->
         ipa: String::new(),
         pos: String::new(),
         example: String::new(),
+        example_vi: String::new(),
         status: "new".into(),
         collection_id: String::new(),
     }))
@@ -384,6 +407,36 @@ pub async fn vocab_remove(app: AppHandle, id: String) -> Result<(), String> {
         return Err("Chưa bỏ được từ này.".into());
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn vocab_move(app: AppHandle, ids: Vec<String>, collection_id: String) -> Result<serde_json::Value, String> {
+    let collection_id = collection_id.trim().to_string();
+    let ids: Vec<String> = ids
+        .into_iter()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect();
+    if ids.is_empty() {
+        return Err("Chưa chọn từ nào.".into());
+    }
+    if collection_id.is_empty() {
+        return Err("Hãy chọn bộ sưu tập.".into());
+    }
+    let token = crate::auth::bearer_token(&app).ok_or("Hãy đăng nhập để chuyển bộ.")?;
+    let (status, body) = crate::auth::post_json(
+        &format!("{}/api/words/move", crate::env::dict_origin(&app)),
+        json!({ "ids": ids, "collection_id": collection_id }),
+        Some(&token),
+    )
+    .await?;
+    if status.as_u16() == 401 {
+        return Err("Hãy đăng nhập lại để chuyển bộ.".into());
+    }
+    if !status.is_success() {
+        return Err(api_error(&body, "Chưa chuyển được từ sang bộ khác."));
+    }
+    Ok(body)
 }
 
 pub async fn save_pair(
@@ -478,6 +531,7 @@ fn maybe_remember(app: &AppHandle, collection_id: &str) {
     let _ = save(app, &saved);
 }
 
+#[allow(dead_code)]
 const DEFAULT_COLLECTION_NAME: &str = "Từ vựng của tôi";
 
 async fn fetch_collections(app: &AppHandle, token: &str) -> Result<Vec<VocabCollection>, String> {
@@ -499,6 +553,7 @@ async fn fetch_collections(app: &AppHandle, token: &str) -> Result<Vec<VocabColl
         .unwrap_or_default())
 }
 
+#[allow(dead_code)]
 async fn create_named_collection(
     app: &AppHandle,
     token: &str,
@@ -531,13 +586,31 @@ async fn create_named_collection(
     map_collection(col).ok_or_else(|| "Chưa tạo được bộ sưu tập.".into())
 }
 
-/// 0 bộ → tạo mặc định; 1 bộ → dùng bộ đó; ≥2 → ưu tiên last-used còn tồn tại.
+fn clear_save_collection_id(app: &AppHandle) {
+    let mut saved = load(app);
+    if saved.save_collection_id.is_empty() {
+        return;
+    }
+    saved.save_collection_id.clear();
+    let _ = save(app, &saved);
+}
+
+/// Ưu tiên bộ đã chọn trong Cài đặt; id không còn thì xóa và fallback.
+/// 0 bộ → để server tạo bộ mặc định (Từ mới); 1 bộ → dùng bộ đó; ≥2 → last-used / mặc định / bộ đầu.
 async fn resolve_save_collection_id(app: &AppHandle, token: &str) -> Result<String, String> {
     let mut cols = fetch_collections(app, token).await?;
+    let preferred = load(app).save_collection_id.trim().to_string();
+    if !preferred.is_empty() {
+        if let Some(hit) = cols.iter().find(|c| c.id == preferred) {
+            return Ok(hit.id.clone());
+        }
+        if crate::auth::bearer_token(app).as_deref() == Some(token) {
+            clear_save_collection_id(app);
+        }
+    }
     if cols.is_empty() {
-        let created = create_named_collection(app, token, DEFAULT_COLLECTION_NAME).await?;
-        if crate::auth::bearer_token(app).as_deref() == Some(token) { maybe_remember(app, &created.id); }
-        return Ok(created.id);
+        // Khong tao bo phia client: /api/words/add khong co collection_id se dung bo mac dinh "Từ mới".
+        return Ok(String::new());
     }
     if cols.len() == 1 {
         let id = cols.remove(0).id;
@@ -561,29 +634,27 @@ fn view(saved: &SavedVocab) -> VocabView {
         auto_add: saved.auto_add,
         remember_last_collection: true,
         last_collection_id: saved.last_collection_id.clone(),
+        save_collection_id: saved.save_collection_id.clone(),
+    }
+}
+
+fn empty_saved() -> SavedVocab {
+    SavedVocab {
+        auto_add: true,
+        remember_last_collection: true,
+        last_collection_id: String::new(),
+        save_collection_id: String::new(),
     }
 }
 
 fn load(app: &AppHandle) -> SavedVocab {
     let Ok(path) = vocab_path(app) else {
-        return SavedVocab {
-            auto_add: true,
-            remember_last_collection: true,
-            last_collection_id: String::new(),
-        };
+        return empty_saved();
     };
     let Ok(raw) = std::fs::read(path) else {
-        return SavedVocab {
-            auto_add: true,
-            remember_last_collection: true,
-            last_collection_id: String::new(),
-        };
+        return empty_saved();
     };
-    serde_json::from_slice(&raw).unwrap_or(SavedVocab {
-        auto_add: true,
-        remember_last_collection: true,
-        last_collection_id: String::new(),
-    })
+    serde_json::from_slice(&raw).unwrap_or_else(|_| empty_saved())
 }
 
 fn save(app: &AppHandle, saved: &SavedVocab) -> Result<(), String> {
@@ -611,6 +682,8 @@ fn api_error(body: &serde_json::Value, fallback: &str) -> String {
         Some("collection_not_found") => "Không tìm thấy bộ sưu tập.".into(),
         Some("invalid_name") => "Tên bộ sưu tập không hợp lệ.".into(),
         Some("unauthorized") => "Hãy đăng nhập lại.".into(),
+        Some("word_not_found") => "Không tìm thấy từ này.".into(),
+        Some("no_words") => "Chưa chọn từ nào.".into(),
         Some(code) if !code.is_empty() => format!("Có lỗi xảy ra ({code})."),
         _ => fallback.into(),
     }
