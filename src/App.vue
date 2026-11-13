@@ -649,6 +649,10 @@ nav button.on {
   padding: 48px 56px;
 }
 
+.content:has(> .words) {
+  overflow: hidden;
+}
+
 .panel {
   width: min(100%, 420px);
   margin: auto;

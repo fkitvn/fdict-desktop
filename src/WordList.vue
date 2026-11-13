@@ -482,7 +482,14 @@ onMounted(async () => {
                 <button class="text" type="button" :disabled="saving" @click="cancelEdit">Hủy</button>
               </div>
             </form>
-            <button v-else type="button" class="word-row" @click="detail = item">
+            <div
+              v-else
+              class="word-row"
+              role="button"
+              tabindex="0"
+              @click="detail = item"
+              @keydown.enter.prevent="detail = item"
+            >
               <div class="body">
                 <p class="en">
                   <span>{{ item.en }}</span>
@@ -498,7 +505,7 @@ onMounted(async () => {
               <span class="tag" :class="statusClass(item.status)" @click.stop="cycleStatus(item)">
                 {{ STATUS_LABEL[item.status] || item.status }}
               </span>
-            </button>
+            </div>
           </li>
         </ul>
 
@@ -603,7 +610,15 @@ onMounted(async () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.words .head,
+.words .toolbar,
+.words .pager,
+.words .state,
+.words .note {
+  flex: none;
 }
 
 .words .head {
@@ -713,9 +728,9 @@ onMounted(async () => {
   list-style: none;
   margin: 16px 0 0;
   padding: 0;
-  overflow: visible;
   min-height: 0;
-  flex: none;
+  flex: 1;
+  overflow: auto;
 }
 
 .words .collections li {
@@ -812,19 +827,24 @@ onMounted(async () => {
 
 .words .split {
   margin-top: 12px;
-  flex: none;
+  flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   gap: 16px;
 }
 
 .words .split .word-list {
-  width: 100%;
+  width: auto;
+  margin: 0;
 }
 
 .words .split .detail {
-  width: 100%;
+  width: 300px;
+  flex: none;
+  max-height: 100%;
+  overflow: auto;
   position: static;
 }
 
@@ -925,9 +945,7 @@ onMounted(async () => {
   border-radius: 16px;
   padding: 16px;
   background: var(--surface);
-  align-self: start;
-  position: sticky;
-  top: 0;
+  align-self: stretch;
 }
 
 .words .detail header {
@@ -1059,6 +1077,14 @@ onMounted(async () => {
   }
   .words .title-line {
     flex-wrap: wrap;
+  }
+  .words .split {
+    flex-direction: column;
+  }
+  .words .split .detail {
+    width: 100%;
+    order: -1;
+    max-height: 42%;
   }
 }
 </style>
