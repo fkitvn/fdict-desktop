@@ -554,7 +554,8 @@ fn ipa_of(entry: &Value) -> String {
     } else {
         from_list.as_str()
     };
-    raw.trim().trim_matches(|ch| ch == '/' || ch == '[' || ch == ']').trim().to_string()
+    // Giu dau / cua tu dien. Chi bo [ ] (mot so muc dung ngoac vuong). Server moi la cho chuan hoa khi luu.
+    raw.trim().trim_matches(|ch| ch == '[' || ch == ']').trim().to_string()
 }
 
 fn pos_of(entry: &Value) -> String {
