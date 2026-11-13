@@ -49,6 +49,26 @@ struct Lookup {
     word_id: String,
     ipa: String,
     pos: String,
+    example: String,
+    example_vi: String,
+    sentences: Vec<SentencePair>,
+}
+
+#[derive(Clone, Default, Serialize)]
+struct SentencePair {
+    en: String,
+    vi: String,
+}
+
+/// Thông tin kèm theo của một lần tra. Khi đã đăng nhập, server làm đầy (cùng hàm với scan
+/// và Từ điển trên FDict One); app chỉ hiện.
+#[derive(Clone, Default)]
+struct Details {
+    ipa: String,
+    pos: String,
+    example: String,
+    example_vi: String,
+    sentences: Vec<SentencePair>,
 }
 
 pub fn install(app: &tauri::App) -> tauri::Result<()> {
@@ -141,32 +161,37 @@ fn begin_lookup(app: AppHandle, word: String) {
     crate::popup::show(&app);
     let _ = app.emit("lookup", &lookup_loading(&word));
     tauri::async_runtime::spawn(async move {
-        let vietnamese = is_vietnamese(&word);
-        let lex_task = if vietnamese {
-            None
-        } else {
-            let english = word.clone();
-            Some(tauri::async_runtime::spawn(async move { lexicon(&english).await }))
+        // Đã đăng nhập: server tra và làm đầy thông tin. Chưa đăng nhập: tra tại máy như cũ.
+        let token = identity.as_ref().map(|(_, token)| token.trim().to_string()).filter(|token| !token.is_empty());
+        let result = match token.as_deref() {
+            Some(token) => lookup_server(&app, token, &word).await,
+            None => lookup_local(&word).await,
         };
-        let next = match translate(&word).await {
-            Ok((translation, direction)) => {
-                let (ipa, pos) = if let Some(task) = lex_task {
-                    task.await.unwrap_or_default()
-                } else {
-                    lexicon(&translation).await
-                };
+        let next = match result {
+            Ok((translation, direction, details)) => {
                 // Drop results when login changed during translation.
                 if crate::auth::history_identity(&app) != identity { return; }
                 if let Some((owner, _)) = &identity {
-                    crate::history::record(&app, owner, &word, &translation, &direction, &ipa, &pos);
+                    crate::history::record(&app, owner, &word, &translation, &direction, &details.ipa, &details.pos);
                 }
-                let ready = lookup_ready(&word, &translation, &direction, "", "", "", &ipa, &pos);
+                let ready = lookup_ready(&word, &translation, &direction, "", "", "", &details);
                 let _ = app.emit("lookup", &ready);
-                let (save_status, save_message, word_id) = crate::vocab::save_pair(&app, identity.as_ref().map(|(_, token)| token.as_str()), &word, &translation, &direction, &ipa, &pos).await;
+                let (save_status, save_message, word_id) = crate::vocab::save_pair(
+                    &app,
+                    identity.as_ref().map(|(_, token)| token.as_str()),
+                    &word,
+                    &translation,
+                    &direction,
+                    &details.ipa,
+                    &details.pos,
+                    &details.example,
+                    &details.example_vi,
+                )
+                .await;
                 if save_status.is_empty() {
                     return;
                 }
-                lookup_ready(&word, &translation, &direction, &save_status, &save_message, &word_id, &ipa, &pos)
+                lookup_ready(&word, &translation, &direction, &save_status, &save_message, &word_id, &details)
             }
             Err(message) => lookup_message("error", &word, &message),
         };
@@ -195,10 +220,13 @@ fn lookup_loading(word: &str) -> Lookup {
         word_id: String::new(),
         ipa: String::new(),
         pos: String::new(),
+        example: String::new(),
+        example_vi: String::new(),
+        sentences: Vec::new(),
     }
 }
 
-fn lookup_ready(word: &str, translation: &str, direction: &str, save_status: &str, save_message: &str, word_id: &str, ipa: &str, pos: &str) -> Lookup {
+fn lookup_ready(word: &str, translation: &str, direction: &str, save_status: &str, save_message: &str, word_id: &str, details: &Details) -> Lookup {
     Lookup {
         status: "ready".into(),
         word: word.into(),
@@ -208,8 +236,11 @@ fn lookup_ready(word: &str, translation: &str, direction: &str, save_status: &st
         save_status: save_status.into(),
         save_message: save_message.into(),
         word_id: word_id.into(),
-        ipa: ipa.into(),
-        pos: pos.into(),
+        ipa: details.ipa.clone(),
+        pos: details.pos.clone(),
+        example: details.example.clone(),
+        example_vi: details.example_vi.clone(),
+        sentences: details.sentences.clone(),
     }
 }
 
@@ -225,6 +256,9 @@ fn lookup_message(status: &str, word: &str, message: &str) -> Lookup {
         word_id: String::new(),
         ipa: String::new(),
         pos: String::new(),
+        example: String::new(),
+        example_vi: String::new(),
+        sentences: Vec::new(),
     }
 }
 
@@ -359,6 +393,68 @@ fn hotkey_path(app: &AppHandle) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
     dir.push("hotkey.json");
     Ok(dir)
+}
+
+/// Tra qua server (/api/words/lookup): nghĩa, phiên âm, loại từ, câu ví dụ và nghĩa câu ví dụ
+/// đều do server làm đầy. App không tự gọi từ điển ngoài khi đã đăng nhập.
+async fn lookup_server(app: &AppHandle, token: &str, word: &str) -> Result<(String, String, Details), String> {
+    let dir = if is_vietnamese(word) { "vi-en" } else { "en-vi" };
+    let (status, body) = crate::auth::post_json(
+        &format!("{}/api/words/lookup", crate::env::dict_origin(app)),
+        serde_json::json!({ "q": word, "dir": dir }),
+        Some(token),
+    )
+    .await?;
+    match status.as_u16() {
+        200 => {}
+        400 => return Err("Hãy nhập một từ hoặc một câu ngắn.".into()),
+        401 => return Err("Hãy đăng nhập lại để tra từ.".into()),
+        404 => return Err("Không tìm thấy từ này.".into()),
+        429 => return Err("Tra nhanh quá. Thử lại sau ít phút.".into()),
+        _ => return Err("Máy chủ chưa tra được từ này.".into()),
+    }
+    let text = |key: &str| body.get(key).and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
+    let direction = if text("dir") == "vi-en" { "vi-en" } else { "en-vi" }.to_string();
+    let translation = if direction == "vi-en" { text("en") } else { text("vi") };
+    if translation.is_empty() {
+        return Err("Chưa dịch được từ này.".into());
+    }
+    let sentences = body
+        .get("sentences")
+        .and_then(|value| value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let en = item.get("en").and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
+                    let vi = item.get("vi").and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
+                    if en.is_empty() { None } else { Some(SentencePair { en, vi }) }
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Ok((
+        translation,
+        direction,
+        Details { ipa: text("ipa"), pos: text("pos"), example: text("example"), example_vi: text("example_vi"), sentences },
+    ))
+}
+
+/// Chưa đăng nhập: tra tại máy như trước (MyMemory + dictionaryapi), không thêm làm đầy.
+async fn lookup_local(word: &str) -> Result<(String, String, Details), String> {
+    let lex_task = if is_vietnamese(word) {
+        None
+    } else {
+        let english = word.to_string();
+        Some(tauri::async_runtime::spawn(async move { lexicon(&english).await }))
+    };
+    let (translation, direction) = translate(word).await?;
+    let (ipa, pos) = if let Some(task) = lex_task {
+        task.await.unwrap_or_default()
+    } else {
+        lexicon(&translation).await
+    };
+    Ok((translation, direction, Details { ipa, pos, ..Default::default() }))
 }
 
 async fn translate(word: &str) -> Result<(String, String), String> {
