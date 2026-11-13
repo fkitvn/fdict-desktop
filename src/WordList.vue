@@ -36,6 +36,8 @@ const draftVi = ref("");
 const dialog = ref(null);
 const nameInput = ref("");
 const lastCollectionId = ref("");
+const selected = ref([]);
+const moveToId = ref("");
 
 const current = computed(() => collections.value.find((c) => c.id === openId.value) || null);
 
@@ -138,6 +140,7 @@ async function openCollection(col) {
   page.value = 1;
   detail.value = null;
   editing.value = "";
+  selected.value = [];
   await rememberCollection(col.id);
   await loadWords();
 }
@@ -150,6 +153,7 @@ function backToList() {
   query.value = "";
   filter.value = "all";
   page.value = 1;
+  selected.value = [];
   message.value = "";
   loadCollections();
 }
@@ -160,6 +164,38 @@ function openDialog(kind, col = null) {
   message.value = "";
 }
 
+function toggleSelect(id, event) {
+  event?.stopPropagation();
+  const has = selected.value.includes(id);
+  selected.value = has ? selected.value.filter((item) => item !== id) : [...selected.value, id];
+}
+
+const moveTargets = computed(() => collections.value.filter((c) => c.id && c.id !== openId.value));
+
+function openMove(ids) {
+  const list = (ids || []).filter(Boolean);
+  if (!list.length) {
+    message.value = "Chưa chọn từ nào.";
+    return;
+  }
+  if (!moveTargets.value.length) {
+    message.value = "Hãy tạo bộ sưu tập khác trước.";
+    return;
+  }
+  moveToId.value = moveTargets.value[0]?.id || "";
+  dialog.value = { kind: "move", ids: list };
+  message.value = "";
+}
+
+function wordLabel(ids) {
+  if (!ids?.length) return "";
+  if (ids.length === 1) {
+    const w = words.value.find((item) => item.id === ids[0]) || (detail.value?.id === ids[0] ? detail.value : null);
+    return w?.en ? `"${w.en}"` : "1 từ";
+  }
+  return `${ids.length} từ`;
+}
+
 function closeDialog() {
   if (busy.value) return;
   dialog.value = null;
@@ -168,7 +204,7 @@ function closeDialog() {
 async function submitDialog() {
   if (!dialog.value || busy.value) return;
   const name = nameInput.value.trim();
-  if (dialog.value.kind !== "delete" && !name) {
+  if (dialog.value.kind !== "delete" && dialog.value.kind !== "move" && !name) {
     message.value = "Hãy nhập tên bộ sưu tập.";
     return;
   }
@@ -195,6 +231,26 @@ async function submitDialog() {
       dialog.value = null;
       if (openId.value === targetId) backToList();
       else await loadCollections();
+    } else if (kind === "move") {
+      const ids = dialog.value.ids || [];
+      const target = collections.value.find((c) => c.id === moveToId.value);
+      if (!target) {
+        message.value = "Hãy chọn bộ sưu tập.";
+        return;
+      }
+      await invoke("vocab_move", { ids, collectionId: target.id });
+      const gone = new Set(ids);
+      words.value = words.value.filter((w) => !gone.has(w.id));
+      if (detail.value && gone.has(detail.value.id)) detail.value = null;
+      selected.value = selected.value.filter((id) => !gone.has(id));
+      const n = ids.length;
+      collections.value = collections.value.map((c) => {
+        if (c.id === openId.value) return { ...c, wordCount: Math.max(0, (c.wordCount || 0) - n) };
+        if (c.id === target.id) return { ...c, wordCount: (c.wordCount || 0) + n };
+        return c;
+      });
+      dialog.value = null;
+      message.value = `Đã chuyển ${wordLabel(ids)} sang "${target.name}"`;
     } else {
       dialog.value = null;
     }
@@ -385,6 +441,15 @@ onMounted(async () => {
             {{ f.label }}
           </button>
         </div>
+        <button
+          v-if="selected.length"
+          type="button"
+          class="text"
+          :disabled="busy"
+          @click="openMove(selected)"
+        >
+          Chuyển bộ ({{ selected.length }})
+        </button>
       </div>
 
       <p v-if="wordsLoading" class="state">Đang tải từ.</p>
@@ -394,6 +459,14 @@ onMounted(async () => {
       <div v-else class="split">
         <ul class="word-list">
           <li v-for="item in pagedWords" :key="item.id" :class="{ on: detail?.id === item.id }">
+            <label class="pick" @click.stop>
+              <input
+                type="checkbox"
+                :checked="selected.includes(item.id)"
+                :disabled="busy"
+                @change="toggleSelect(item.id)"
+              />
+            </label>
             <form
               v-if="editing === item.id"
               class="edit"
@@ -441,6 +514,7 @@ onMounted(async () => {
           </p>
           <p class="vi">{{ detail.vi }}</p>
           <p v-if="detail.example" class="example">“{{ detail.example }}”</p>
+          <p v-if="detail.example && detail.exampleVi" class="example-vi">{{ detail.exampleVi }}</p>
           <p class="status-line">
             Trạng thái:
             <button type="button" class="tag" :class="statusClass(detail.status)" @click="cycleStatus(detail)">
@@ -449,6 +523,7 @@ onMounted(async () => {
           </p>
           <div class="actions">
             <button type="button" @click="startEdit(detail)">Sửa</button>
+            <button type="button" :disabled="busy" @click="openMove([detail.id])">Chuyển bộ</button>
             <button class="remove" type="button" :disabled="removing === detail.id" @click="removeWord(detail)">
               {{ removing === detail.id ? "…" : "Xóa" }}
             </button>
@@ -474,14 +549,19 @@ onMounted(async () => {
               ? "Tạo bộ sưu tập"
               : dialog.kind === "rename"
                 ? "Đổi tên bộ sưu tập"
-                : "Xóa bộ sưu tập"
+                : dialog.kind === "move"
+                  ? "Chuyển bộ"
+                  : "Xóa bộ sưu tập"
           }}
         </h3>
         <p v-if="dialog.kind === 'delete'" class="sub danger-copy">
           Xóa bộ “{{ dialog.col?.name }}” ({{ dialog.col?.wordCount || 0 }} từ)? Toàn bộ từ trong bộ sẽ bị xóa. Hành động này không hoàn tác.
         </p>
+        <p v-else-if="dialog.kind === 'move'" class="sub">
+          Chọn bộ để chuyển {{ wordLabel(dialog.ids) }} sang.
+        </p>
         <input
-          v-if="dialog.kind !== 'delete'"
+          v-if="dialog.kind !== 'delete' && dialog.kind !== 'move'"
           v-model="nameInput"
           type="text"
           maxlength="60"
@@ -489,15 +569,26 @@ onMounted(async () => {
           :disabled="busy"
           @keydown.enter.prevent="submitDialog"
         />
+        <select
+          v-if="dialog.kind === 'move'"
+          v-model="moveToId"
+          :disabled="busy"
+        >
+          <option v-for="col in moveTargets" :key="col.id" :value="col.id">{{ col.name }}</option>
+        </select>
         <div class="actions">
           <button type="button" class="text" :disabled="busy" @click="closeDialog">Hủy</button>
           <button
             type="button"
             :class="{ remove: dialog.kind === 'delete', primary: dialog.kind !== 'delete' }"
-            :disabled="busy || (dialog.kind !== 'delete' && !nameInput.trim())"
+            :disabled="
+              busy ||
+              (dialog.kind !== 'delete' && dialog.kind !== 'move' && !nameInput.trim()) ||
+              (dialog.kind === 'move' && !moveToId)
+            "
             @click="submitDialog"
           >
-            {{ busy ? "…" : dialog.kind === "delete" ? "Xóa" : "Lưu" }}
+            {{ busy ? "…" : dialog.kind === "delete" ? "Xóa" : dialog.kind === "move" ? "Chuyển" : "Lưu" }}
           </button>
         </div>
       </div>
@@ -738,7 +829,21 @@ onMounted(async () => {
 }
 
 .words .word-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border-top: 1px solid var(--border);
+}
+
+.words .pick {
+  display: flex;
+  align-items: center;
+  padding: 0 0 0 4px;
+  cursor: pointer;
+}
+
+.words .pick input {
+  margin: 0;
 }
 
 .words .word-row {
@@ -843,6 +948,13 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
+.words .example-vi {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .words .status-line {
   margin-top: 14px;
   display: flex;
@@ -924,6 +1036,17 @@ onMounted(async () => {
 .words .modal-card h3 {
   margin: 0;
   font-size: 18px;
+}
+
+.words .modal-card select {
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
 }
 
 .words .modal-card .actions {
