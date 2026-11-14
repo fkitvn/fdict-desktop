@@ -54,7 +54,8 @@ const filteredWords = computed(() => {
     return (
       w.en.toLowerCase().includes(q) ||
       w.vi.toLowerCase().includes(q) ||
-      (w.example || "").toLowerCase().includes(q)
+      (w.example || "").toLowerCase().includes(q) ||
+      (w.sentences || []).some((s) => s.en.toLowerCase().includes(q) || (s.vi || "").toLowerCase().includes(q))
     );
   });
 });
@@ -326,8 +327,9 @@ async function saveEdit(item) {
   message.value = "";
   try {
     const next = await invoke("vocab_update", { id: item.id, en, vi });
-    words.value = words.value.map((w) => (w.id === item.id ? { ...w, ...next } : w));
-    if (detail.value?.id === item.id) detail.value = { ...detail.value, ...next };
+    const patch = next.sentences?.length ? next : { ...next, sentences: item.sentences || [] };
+    words.value = words.value.map((w) => (w.id === item.id ? { ...w, ...patch } : w));
+    if (detail.value?.id === item.id) detail.value = { ...detail.value, ...patch };
     editing.value = "";
   } catch (error) {
     const text = invokeError(error);
@@ -522,6 +524,13 @@ onMounted(async () => {
           <p class="vi">{{ detail.vi }}</p>
           <p v-if="detail.example" class="example">“{{ detail.example }}”</p>
           <p v-if="detail.example && detail.exampleVi" class="example-vi">{{ detail.exampleVi }}</p>
+          <ul v-if="detail.sentences?.length" class="practice">
+            <li v-for="s in detail.sentences" :key="s.en">
+              <p>{{ s.en }}</p>
+              <p v-if="s.ipa" class="ipa">{{ ipaText(s.ipa) }}</p>
+              <p v-if="s.vi" class="example-vi">{{ s.vi }}</p>
+            </li>
+          </ul>
           <p class="status-line">
             Trạng thái:
             <button type="button" class="tag" :class="statusClass(detail.status)" @click="cycleStatus(detail)">
@@ -967,10 +976,36 @@ onMounted(async () => {
 }
 
 .words .example-vi {
-  margin-top: 4px;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 13px;
   line-height: 1.45;
+}
+
+.words .practice {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.words .practice li {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-2, color-mix(in srgb, var(--muted) 12%, transparent));
+}
+
+.words .practice p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.words .practice .ipa {
+  margin-top: 2px;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .words .status-line {
