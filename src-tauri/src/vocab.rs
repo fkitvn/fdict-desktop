@@ -35,6 +35,14 @@ pub fn vocab_snapshot(app: AppHandle) -> VocabView {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PracticeSentence {
+    en: String,
+    vi: String,
+    ipa: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VocabWord {
     id: String,
     en: String,
@@ -43,6 +51,7 @@ pub struct VocabWord {
     pos: String,
     example: String,
     example_vi: String,
+    sentences: Vec<PracticeSentence>,
     status: String,
     collection_id: String,
 }
@@ -121,6 +130,25 @@ fn map_api_word(item: &serde_json::Value) -> Option<VocabWord> {
             .unwrap_or("")
             .trim()
             .to_string(),
+        sentences: item
+            .get("sentences")
+            .and_then(|v| v.as_array())
+            .map(|list| {
+                list.iter()
+                    .filter_map(|s| {
+                        let en = s.get("en").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                        if en.is_empty() {
+                            return None;
+                        }
+                        Some(PracticeSentence {
+                            en,
+                            vi: s.get("vi").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
+                            ipa: s.get("ipa").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         status: item.get("status").and_then(|v| v.as_str()).unwrap_or("new").trim().to_string(),
         collection_id: item
             .get("collection_id")
@@ -355,6 +383,7 @@ pub async fn vocab_update(app: AppHandle, id: String, en: String, vi: String) ->
         pos: String::new(),
         example: String::new(),
         example_vi: String::new(),
+        sentences: Vec::new(),
         status: "new".into(),
         collection_id: String::new(),
     }))

@@ -440,7 +440,7 @@ async fn lookup_server(app: &AppHandle, token: &str, word: &str) -> Result<(Stri
     ))
 }
 
-/// Chưa đăng nhập: tra tại máy như trước (MyMemory + dictionaryapi), không thêm làm đầy.
+/// Chưa đăng nhập: tra tại máy (MyMemory + dictionaryapi). Không lưu từ, không sinh câu AI.
 async fn lookup_local(word: &str) -> Result<(String, String, Details), String> {
     let lex_task = if is_vietnamese(word) {
         None
