@@ -46,6 +46,7 @@ pub fn run() {
             vocab::vocab_set,
             vocab::vocab_list,
             vocab::vocab_collections,
+            vocab::vocab_stats,
             vocab::vocab_collection_create,
             vocab::vocab_collection_rename,
             vocab::vocab_collection_delete,

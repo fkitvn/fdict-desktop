@@ -39,6 +39,9 @@ pub struct PracticeSentence {
     en: String,
     vi: String,
     ipa: String,
+    pass_order: bool,
+    pass_cloze: bool,
+    pass_hear: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -65,6 +68,7 @@ pub struct VocabCollection {
     color: String,
     icon: String,
     word_count: u64,
+    sentence_count: u64,
     is_default: bool,
 }
 
@@ -144,6 +148,9 @@ fn map_api_word(item: &serde_json::Value) -> Option<VocabWord> {
                             en,
                             vi: s.get("vi").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
                             ipa: s.get("ipa").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
+                            pass_order: s.get("pass_order").and_then(|v| v.as_bool()).unwrap_or(false),
+                            pass_cloze: s.get("pass_cloze").and_then(|v| v.as_bool()).unwrap_or(false),
+                            pass_hear: s.get("pass_hear").and_then(|v| v.as_bool()).unwrap_or(false),
                         })
                     })
                     .collect()
@@ -172,6 +179,7 @@ fn map_collection(item: &serde_json::Value) -> Option<VocabCollection> {
         color: item.get("color").and_then(|v| v.as_str()).unwrap_or("blue").to_string(),
         icon: item.get("icon").and_then(|v| v.as_str()).unwrap_or("zi-note").to_string(),
         word_count: item.get("word_count").and_then(|v| v.as_u64()).unwrap_or(0),
+        sentence_count: item.get("sentence_count").and_then(|v| v.as_u64()).unwrap_or(0),
         is_default: item.get("is_default").and_then(|v| v.as_bool()).unwrap_or(false),
     })
 }
@@ -242,6 +250,66 @@ pub async fn vocab_collections(app: AppHandle) -> Result<Vec<VocabCollection>, S
         .and_then(|v| v.as_array())
         .map(|items| items.iter().filter_map(map_collection).collect())
         .unwrap_or_default())
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SentenceProgress {
+    total: u64,
+    mastered: u64,
+    learning: u64,
+    fresh: u64,
+    order: u64,
+    cloze: u64,
+    hear: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StudyStats {
+    words: u64,
+    fresh: u64,
+    learning: u64,
+    mastered: u64,
+    sentences: u64,
+    sentence_progress: SentenceProgress,
+}
+
+fn json_u64(item: &serde_json::Value, key: &str) -> u64 {
+    item.get(key).and_then(|v| v.as_u64()).unwrap_or(0)
+}
+
+#[tauri::command]
+pub async fn vocab_stats(app: AppHandle) -> Result<StudyStats, String> {
+    let token = crate::auth::bearer_token(&app).ok_or("Hãy đăng nhập để xem thống kê.")?;
+    let (status, body) = crate::auth::get_json(
+        &format!("{}/api/app/stats", crate::env::dict_origin(&app)),
+        Some(&token),
+    )
+    .await?;
+    if status.as_u16() == 401 {
+        return Err("Hãy đăng nhập lại để xem thống kê.".into());
+    }
+    if !status.is_success() {
+        return Err(api_error(&body, "Chưa tải được thống kê."));
+    }
+    let progress = body.get("sentence_progress").cloned().unwrap_or(serde_json::json!({}));
+    Ok(StudyStats {
+        words: json_u64(&body, "words"),
+        fresh: json_u64(&body, "new"),
+        learning: json_u64(&body, "learning"),
+        mastered: json_u64(&body, "mastered"),
+        sentences: json_u64(&body, "sentences"),
+        sentence_progress: SentenceProgress {
+            total: json_u64(&progress, "total"),
+            mastered: json_u64(&progress, "mastered"),
+            learning: json_u64(&progress, "learning"),
+            fresh: json_u64(&progress, "new"),
+            order: json_u64(&progress, "order"),
+            cloze: json_u64(&progress, "cloze"),
+            hear: json_u64(&progress, "hear"),
+        },
+    })
 }
 
 #[tauri::command]

@@ -54,7 +54,6 @@ const filteredWords = computed(() => {
     return (
       w.en.toLowerCase().includes(q) ||
       w.vi.toLowerCase().includes(q) ||
-      (w.example || "").toLowerCase().includes(q) ||
       (w.sentences || []).some((s) => s.en.toLowerCase().includes(q) || (s.vi || "").toLowerCase().includes(q))
     );
   });
@@ -68,6 +67,13 @@ const pagedWords = computed(() => {
 });
 
 const totalWords = computed(() => collections.value.reduce((n, c) => n + (c.wordCount || 0), 0));
+const totalSentences = computed(() => collections.value.reduce((n, c) => n + (c.sentenceCount || 0), 0));
+const study = ref(null);
+
+function passLine(sentence) {
+  const bit = (on, name) => `${name} ${on ? "xong" : "chưa"}`;
+  return `${bit(sentence.passOrder, "Sắp xếp")} · ${bit(sentence.passCloze, "Điền")} · ${bit(sentence.passHear, "Nghe")}`;
+}
 
 function invokeError(error) {
   return typeof error === "string" ? error : "Không kết nối được máy chủ.";
@@ -352,9 +358,17 @@ watch(query, () => {
   page.value = 1;
 });
 
+async function loadStudy() {
+  try {
+    study.value = await invoke("vocab_stats");
+  } catch {
+    study.value = null;
+  }
+}
+
 onMounted(async () => {
   await loadSettings();
-  await loadCollections();
+  await Promise.all([loadCollections(), loadStudy()]);
 });
 </script>
 
@@ -364,7 +378,13 @@ onMounted(async () => {
       <header class="head">
         <div class="title-block">
           <h2>Bộ sưu tập</h2>
-          <p class="sub">{{ totalWords }} từ · {{ collections.length }} bộ</p>
+          <p class="sub">{{ totalWords }} từ · {{ totalSentences }} câu · {{ collections.length }} bộ</p>
+          <p v-if="study" class="sub">
+            Từ đã thuộc {{ study.mastered }}/{{ study.words }} · Câu đã thuộc
+            {{ study.sentenceProgress?.mastered || 0 }}/{{ study.sentenceProgress?.total || 0 }} · Sắp xếp
+            {{ study.sentenceProgress?.order || 0 }} · Điền {{ study.sentenceProgress?.cloze || 0 }} · Nghe
+            {{ study.sentenceProgress?.hear || 0 }}
+          </p>
         </div>
         <button type="button" class="primary create-btn" @click="openDialog('create')">Tạo bộ</button>
       </header>
@@ -388,7 +408,7 @@ onMounted(async () => {
             <span class="meta">
               <strong>{{ col.name }}</strong>
               <small>
-                {{ col.wordCount || 0 }} từ
+                {{ col.wordCount || 0 }} từ · {{ col.sentenceCount || 0 }} câu
                 <template v-if="col.isDefault"> · Mặc định</template>
                 <template v-if="col.id === lastCollectionId"> · Lưu nhanh</template>
               </small>
@@ -426,7 +446,7 @@ onMounted(async () => {
               </button>
             </div>
           </div>
-          <p class="sub">{{ current.wordCount || filteredWords.length }} từ</p>
+          <p class="sub">{{ current.wordCount || filteredWords.length }} từ · {{ current.sentenceCount || 0 }} câu</p>
         </div>
       </header>
 
@@ -522,13 +542,12 @@ onMounted(async () => {
             <i v-if="detail.ipa">{{ ipaText(detail.ipa) }}</i>
           </p>
           <p class="vi">{{ detail.vi }}</p>
-          <p v-if="detail.example" class="example">“{{ detail.example }}”</p>
-          <p v-if="detail.example && detail.exampleVi" class="example-vi">{{ detail.exampleVi }}</p>
           <ul v-if="detail.sentences?.length" class="practice">
             <li v-for="s in detail.sentences" :key="s.en">
               <p>{{ s.en }}</p>
               <p v-if="s.ipa" class="ipa">{{ ipaText(s.ipa) }}</p>
               <p v-if="s.vi" class="example-vi">{{ s.vi }}</p>
+              <p class="passes">{{ passLine(s) }}</p>
             </li>
           </ul>
           <p class="status-line">
@@ -1000,6 +1019,12 @@ onMounted(async () => {
 .words .practice p {
   margin: 0;
   line-height: 1.45;
+}
+
+.words .practice .passes {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .words .practice .ipa {

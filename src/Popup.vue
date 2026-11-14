@@ -99,10 +99,7 @@ function toggleSpeak() {
 }
 
 function extraSentences(item) {
-  const ex = String(item.example || "").trim().toLowerCase();
-  return (item.sentences || []).filter(
-    (s) => s?.en && s.en.trim().toLowerCase() !== ex,
-  );
+  return (item.sentences || []).filter((s) => s?.en);
 }
 
 function englishOf(item) {
@@ -274,13 +271,6 @@ onBeforeUnmount(() => {
           ><span v-if="item.pos && item.ipa"> · </span
           ><i v-if="item.ipa">{{ ipaText(item.ipa) }}</i>
         </p>
-        <div v-if="item.status === 'ready' && item.example" class="example">
-          <p class="ex-en">
-            <span>{{ item.example }}</span>
-            <SpeakButton :text="item.example" />
-          </p>
-          <p v-if="item.exampleVi" class="ex-vi">{{ item.exampleVi }}</p>
-        </div>
         <div
           v-if="item.status === 'ready' && extraSentences(item).length"
           class="sentences"
