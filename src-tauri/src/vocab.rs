@@ -273,6 +273,7 @@ pub struct WordProgress {
     fresh: u64,
     quiz: u64,
     pos: u64,
+    spell: u64,
 }
 
 #[derive(Clone, Serialize)]
@@ -320,6 +321,7 @@ pub async fn vocab_stats(app: AppHandle) -> Result<StudyStats, String> {
             fresh: json_u64(&words, "new"),
             quiz: json_u64(&words, "quiz"),
             pos: json_u64(&words, "pos"),
+            spell: json_u64(&words, "spell"),
         },
         sentence_progress: SentenceProgress {
             total: json_u64(&progress, "total"),
