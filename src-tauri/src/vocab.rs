@@ -266,8 +266,6 @@ pub struct SentenceProgress {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct WordProgress {
     total: u64,
     mastered: u64,
