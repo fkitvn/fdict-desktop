@@ -266,12 +266,26 @@ pub struct SentenceProgress {
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WordProgress {
+    total: u64,
+    mastered: u64,
+    learning: u64,
+    fresh: u64,
+    quiz: u64,
+    pos: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StudyStats {
     words: u64,
     fresh: u64,
     learning: u64,
     mastered: u64,
     sentences: u64,
+    word_progress: WordProgress,
     sentence_progress: SentenceProgress,
 }
 
@@ -294,12 +308,21 @@ pub async fn vocab_stats(app: AppHandle) -> Result<StudyStats, String> {
         return Err(api_error(&body, "Chưa tải được thống kê."));
     }
     let progress = body.get("sentence_progress").cloned().unwrap_or(serde_json::json!({}));
+    let words = body.get("word_progress").cloned().unwrap_or(serde_json::json!({}));
     Ok(StudyStats {
         words: json_u64(&body, "words"),
         fresh: json_u64(&body, "new"),
         learning: json_u64(&body, "learning"),
         mastered: json_u64(&body, "mastered"),
         sentences: json_u64(&body, "sentences"),
+        word_progress: WordProgress {
+            total: json_u64(&words, "total"),
+            mastered: json_u64(&words, "mastered"),
+            learning: json_u64(&words, "learning"),
+            fresh: json_u64(&words, "new"),
+            quiz: json_u64(&words, "quiz"),
+            pos: json_u64(&words, "pos"),
+        },
         sentence_progress: SentenceProgress {
             total: json_u64(&progress, "total"),
             mastered: json_u64(&progress, "mastered"),
