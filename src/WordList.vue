@@ -380,7 +380,8 @@ onMounted(async () => {
           <h2>Bộ sưu tập</h2>
           <p class="sub">{{ totalWords }} từ · {{ totalSentences }} câu · {{ collections.length }} bộ</p>
           <p v-if="study" class="sub">
-            Từ đã thuộc {{ study.mastered }}/{{ study.words }} · Câu đã thuộc
+            Từ đã thuộc {{ study.wordProgress?.mastered || study.mastered }}/{{ study.words }} · Luyện tập
+            {{ study.wordProgress?.quiz || 0 }} · Phân loại từ {{ study.wordProgress?.pos || 0 }} · Câu đã thuộc
             {{ study.sentenceProgress?.mastered || 0 }}/{{ study.sentenceProgress?.total || 0 }} · Sắp xếp
             {{ study.sentenceProgress?.order || 0 }} · Điền {{ study.sentenceProgress?.cloze || 0 }} · Nghe
             {{ study.sentenceProgress?.hear || 0 }}
