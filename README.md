@@ -13,11 +13,7 @@ yarn
 yarn tauri dev
 ```
 
-Debug builds talk to `http://127.0.0.1:8000` and `http://127.0.0.1:8001`. Release builds talk to `https://fkit.vn` and `https://dict.fkit.vn`.
-
-### Lab
-
-A Lab build talks to `https://fkit-dev.joinnow.vn` and `https://fdict-dev.joinnow.vn`. Set `FDICT_BUILD_ENV=lab` at compile time. Do not publish or release a Lab build.
+Debug builds talk to `http://127.0.0.1:8001` (fdict-web-app). Release builds talk to `https://dict.fkit.vn`.
 
 ```powershell
 $env:FDICT_BUILD_ENV = "lab"

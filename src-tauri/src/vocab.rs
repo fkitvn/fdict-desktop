@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -94,7 +94,9 @@ pub fn vocab_set(
         saved.save_collection_id = id.trim().to_string();
     }
     save(&app, &saved)?;
-    Ok(view(&saved))
+    let next = view(&saved);
+    let _ = app.emit("vocab-changed", &next);
+    Ok(next)
 }
 
 fn map_api_word(item: &serde_json::Value) -> Option<VocabWord> {
@@ -559,6 +561,7 @@ pub async fn vocab_move(app: AppHandle, ids: Vec<String>, collection_id: String)
     Ok(body)
 }
 
+#[allow(dead_code)]
 pub async fn save_pair(
     app: &AppHandle,
     lookup_token: Option<&str>,
@@ -636,6 +639,15 @@ pub async fn save_pair(
         Ok(_) => ("error".into(), "Chưa lưu được vào danh sách.".into(), String::new()),
         Err(message) => ("error".into(), message, String::new()),
     }
+}
+
+pub(crate) fn lookup_save(app: &AppHandle) -> (bool, String) {
+    let saved = load(app);
+    (saved.auto_add, saved.save_collection_id.trim().to_string())
+}
+
+pub(crate) fn remember_collection(app: &AppHandle, collection_id: &str) {
+    maybe_remember(app, collection_id);
 }
 
 fn maybe_remember(app: &AppHandle, collection_id: &str) {

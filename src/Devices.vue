@@ -24,13 +24,6 @@ async function load() {
   loading.value = true;
   message.value = "";
   try {
-    const env = await invoke("env_snapshot");
-    const origin = String(env?.authOrigin || "").replace(/\/$/, "");
-    if (origin) shopUrl.value = origin + "/fdict";
-  } catch {
-    shopUrl.value = "https://fkit.vn/fdict";
-  }
-  try {
     items.value = await invoke("device_list");
   } catch (error) {
     items.value = [];

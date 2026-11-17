@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import SpeakButton from "./SpeakButton.vue";
 import { speak, stopSpeak } from "./speak.js";
+import { markSentence } from "./marks.js";
 
 const items = ref([]);
 const notice = ref("");
@@ -20,6 +21,7 @@ const autoSpeak = ref(localStorage.getItem("fdict-auto-speak") === "1");
 const hotkeyLabel = ref("Alt + Q");
 const removing = ref("");
 let stopLookup = null;
+let stopVocab = null;
 
 function isVietnamese(word) {
   return /[ăâêôơưđáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(
@@ -62,14 +64,18 @@ function apply(payload) {
     example: payload.example || "",
     exampleVi: payload.exampleVi || "",
     sentences: Array.isArray(payload.sentences) ? payload.sentences : [],
+    kind: payload.kind || "",
+    vocab: Array.isArray(payload.vocab) ? payload.vocab : [],
   };
   const previous = items.value.find((item) => item.word === next.word);
   const index = items.value.findIndex((item) => item.word === next.word);
   if (index >= 0) items.value.splice(index, 1);
   items.value.unshift(next);
   items.value = items.value.slice(0, 8);
+  autoSpeak.value = localStorage.getItem("fdict-auto-speak") === "1";
   if (
     autoSpeak.value &&
+    !payload.quiet &&
     next.status === "ready" &&
     previous?.status !== "ready"
   ) {
@@ -104,6 +110,24 @@ function extraSentences(item) {
 
 function englishOf(item) {
   return item.direction === "vi-en" ? item.translation : item.word;
+}
+
+function sentenceMarks(item) {
+  if (item?.kind !== "sentence" || item.status !== "ready") return null;
+  const text = item.direction === "vi-en" ? item.translation : item.word;
+  const words = (item.vocab || []).map((hit) => hit.en).filter(Boolean);
+  if (!text || !words.length) return null;
+  return markSentence(text, words);
+}
+
+async function lookupWord(text) {
+  const word = String(text || "").replace(/[^A-Za-z'-]/g, "").trim();
+  if (!word) return;
+  try {
+    await invoke("lookup_text", { word });
+  } catch (error) {
+    notice.value = typeof error === "string" && error.trim() ? error : "Không tra được từ này.";
+  }
 }
 
 function patch(word, fields) {
@@ -178,10 +202,18 @@ onMounted(async () => {
   } catch {
     stopLookup = null;
   }
+  try {
+    stopVocab = await listen("vocab-changed", (event) => {
+      if (typeof event.payload?.autoAdd === "boolean") autoAdd.value = event.payload.autoAdd;
+    });
+  } catch {
+    stopVocab = null;
+  }
 });
 
 onBeforeUnmount(() => {
   if (stopLookup) stopLookup();
+  if (stopVocab) stopVocab();
   stopSpeak();
 });
 </script>
@@ -241,7 +273,13 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <p class="word">
-          <span>{{ item.word }}</span>
+          <span v-if="sentenceMarks(item) && item.direction !== 'vi-en'" class="marked">
+            <template v-for="(part, index) in sentenceMarks(item)" :key="index">
+              <button v-if="part.on" type="button" class="hit" @click="lookupWord(part.text)">{{ part.text }}</button>
+              <span v-else>{{ part.text }}</span>
+            </template>
+          </span>
+          <span v-else>{{ item.word }}</span>
           <SpeakButton v-if="item.status === 'ready' && item.direction !== 'vi-en'" :text="item.word" />
         </p>
         <p
@@ -253,8 +291,18 @@ onBeforeUnmount(() => {
           ><i v-if="item.ipa">{{ ipaText(item.ipa) }}</i>
         </p>
         <p v-if="item.status === 'ready'" class="mean">
-          <span>{{ item.translation }}</span>
+          <span v-if="sentenceMarks(item) && item.direction === 'vi-en'" class="marked">
+            <template v-for="(part, index) in sentenceMarks(item)" :key="index">
+              <button v-if="part.on" type="button" class="hit" @click="lookupWord(part.text)">{{ part.text }}</button>
+              <span v-else>{{ part.text }}</span>
+            </template>
+          </span>
+          <span v-else>{{ item.translation }}</span>
           <SpeakButton v-if="item.direction === 'vi-en'" :text="item.translation" />
+        </p>
+        <p v-if="item.status === 'ready' && item.kind === 'sentence' && item.vocab?.length" class="roots">
+          <span>Từ vựng</span>
+          <span v-for="hit in item.vocab" :key="hit.en">{{ hit.en }}<template v-if="hit.vi"> · {{ hit.vi }}</template></span>
         </p>
         <p v-else class="mean wait">
           {{ item.status === "loading" ? "Đang dịch…" : item.message }}
@@ -306,12 +354,10 @@ onBeforeUnmount(() => {
           :class="{ on: autoSpeak }"
           data-tauri-drag-region="false"
           :aria-pressed="autoSpeak"
-          :aria-label="
-            autoSpeak ? 'Tắt tự động phát âm' : 'Bật tự động phát âm'
-          "
+          :aria-label="autoSpeak ? 'Tắt tự động phát âm' : 'Bật tự động phát âm'"
           @click.stop="toggleSpeak"
         >
-          <span>Tự động phát âm</span>
+          <span>Phát âm</span>
           <span class="save-switch"><span class="knob"></span></span>
         </button>
         <button
@@ -323,7 +369,7 @@ onBeforeUnmount(() => {
           :aria-label="autoAdd ? 'Tắt tự lưu từ' : 'Bật tự lưu từ'"
           @click.stop="toggleSave"
         >
-          <span>Tự lưu từ</span>
+          <span>Tự lưu</span>
           <span class="save-switch"><span class="knob"></span></span>
         </button>
       </div>
@@ -650,6 +696,35 @@ li + li {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.popup .marked {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.popup .hit {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.popup .roots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .mean {

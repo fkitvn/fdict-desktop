@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import Devices from "./Devices.vue";
-import History from "./History.vue";
+import Home from "./Home.vue";
 import Intro from "./Intro.vue";
 import Settings from "./Settings.vue";
 import WordList from "./WordList.vue";
@@ -33,7 +33,9 @@ let tick = null;
 let stopAuth = null;
 let stopUpdate = null;
 
-const canUpgrade = computed(() => Boolean(update.value?.available || updating.value));
+const canUpgrade = computed(() =>
+  Boolean(update.value?.available || updating.value),
+);
 
 const clock = computed(() => {
   const total = Math.max(0, remain.value);
@@ -191,6 +193,7 @@ async function verifyOtp() {
 
 function goHome() {
   screen.value = "home";
+  refreshHotkey();
   if (view.value.phase !== "welcome") {
     signingIn.value = false;
     step.value = "email";
@@ -233,8 +236,10 @@ async function signOut() {
   <main class="shell">
     <aside>
       <div class="brand">
-        <span class="logo-wrap"><img class="logo" src="/logo-full.svg" alt="" /></span>
-        <span class="brand-name">FDict <span class="brand-sub">Desktop</span></span>
+        <span class="logo-wrap"
+          ><img class="logo" src="/logo-full.svg" alt=""
+        /></span>
+        <span class="brand-name">FDict</span>
         <span v-if="isDev" class="dev-tag">Dev</span>
       </div>
       <nav>
@@ -275,52 +280,65 @@ async function signOut() {
           class="restart"
           type="button"
           :disabled="updating"
-          :aria-label="updating ? 'Đang tải bản mới' : 'Khởi động lại để nâng cấp'"
+          :aria-label="
+            updating ? 'Đang tải bản mới' : 'Khởi động lại để nâng cấp'
+          "
           :title="updating ? 'Đang tải bản mới' : 'Khởi động lại để nâng cấp'"
           @click="restartToUpgrade"
         >
-          <svg :class="{ spin: updating }" viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            :class="{ spin: updating }"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M21 12a9 9 0 1 1-2.6-6.3" />
             <path d="M21 4v6h-6" />
           </svg>
         </button>
         <div v-if="view.phase === 'welcome'" class="account">
-        <img
-          v-if="view.avatarUrl"
-          class="avatar"
-          :src="view.avatarUrl"
-          alt=""
-        />
-        <span v-else class="avatar">{{ initial }}</span>
-        <div class="who">
-          <p>Xin chào</p>
-          <strong>{{ view.name || "bạn" }}</strong>
+          <img
+            v-if="view.avatarUrl"
+            class="avatar"
+            :src="view.avatarUrl"
+            alt=""
+          />
+          <span v-else class="avatar">{{ initial }}</span>
+          <div class="who">
+            <p>Xin chào</p>
+            <strong>{{ view.name || "bạn" }}</strong>
+          </div>
+          <button
+            class="signout"
+            type="button"
+            aria-label="Đăng xuất"
+            title="Đăng xuất"
+            :disabled="busy"
+            @click="askSignOut"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M10 7V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-2"
+              />
+              <path d="M15 12H3" />
+              <path d="M6 9 3 12l3 3" />
+            </svg>
+          </button>
         </div>
-        <button
-          class="signout"
-          type="button"
-          aria-label="Đăng xuất"
-          title="Đăng xuất"
-          :disabled="busy"
-          @click="askSignOut"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M10 7V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-2"
-            />
-            <path d="M15 12H3" />
-            <path d="M6 9 3 12l3 3" />
-          </svg>
-        </button>
-      </div>
       </div>
     </aside>
 
     <section class="content">
-      <WordList v-if="screen === 'words' && view.phase === 'welcome'" :key="view.email" />
+      <WordList
+        v-if="screen === 'words' && view.phase === 'welcome'"
+        :key="view.email"
+      />
       <Devices v-else-if="screen === 'devices' && view.phase === 'welcome'" />
-      <Settings v-else-if="screen === 'settings'" :signed-in="view.phase === 'welcome'" :account-key="view.email" />
-      <History
+      <Settings
+        v-else-if="screen === 'settings'"
+        :signed-in="view.phase === 'welcome'"
+        :account-key="view.email"
+      />
+      <Home
         v-else-if="view.phase === 'welcome'"
         :key="view.email"
         :hotkey-label="hotkeyLabel"
@@ -404,7 +422,9 @@ async function signOut() {
       <p>Bạn sẽ cần mã OTP để đăng nhập lại.</p>
       <div class="confirm-actions">
         <button type="button" @click="confirmSignOut = false">Huỷ</button>
-        <button type="button" class="primary" :disabled="busy" @click="signOut">Đăng xuất</button>
+        <button type="button" class="primary" :disabled="busy" @click="signOut">
+          Đăng xuất
+        </button>
       </div>
     </div>
   </div>
@@ -649,8 +669,13 @@ nav button.on {
   padding: 48px 56px;
 }
 
-.content:has(> .words) {
+.content:has(> .words),
+.content:has(> .home) {
   overflow: hidden;
+}
+
+.content:has(> .home) {
+  padding-bottom: 0;
 }
 
 .panel {
