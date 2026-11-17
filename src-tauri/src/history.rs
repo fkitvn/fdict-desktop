@@ -7,6 +7,14 @@ static STORAGE: Mutex<()> = Mutex::new(());
 
 const LIMIT: usize = 100;
 
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryVocab {
+    pub en: String,
+    pub vi: String,
+    pub ipa: String,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryItem {
@@ -17,9 +25,23 @@ pub struct HistoryItem {
     ipa: String,
     #[serde(default)]
     pos: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    vocab: Vec<HistoryVocab>,
 }
 
-pub fn record(app: &AppHandle, owner: &str, word: &str, translation: &str, direction: &str, ipa: &str, pos: &str) {
+pub fn record(
+    app: &AppHandle,
+    owner: &str,
+    word: &str,
+    translation: &str,
+    direction: &str,
+    ipa: &str,
+    pos: &str,
+    kind: &str,
+    vocab: &[HistoryVocab],
+) {
     let word = word.trim();
     let translation = translation.trim();
     if word.is_empty() || translation.is_empty() {
@@ -37,6 +59,8 @@ pub fn record(app: &AppHandle, owner: &str, word: &str, translation: &str, direc
             direction: direction.into(),
             ipa: ipa.trim().into(),
             pos: pos.trim().into(),
+            kind: kind.trim().into(),
+            vocab: vocab.to_vec(),
         },
     );
     items.truncate(LIMIT);
@@ -106,7 +130,7 @@ mod tests {
     fn accounts_are_isolated_and_legacy_is_not_imported() {
         let base = std::env::temp_dir().join(format!("fdict-history-test-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         std::fs::create_dir_all(&base).unwrap();
-        let item = HistoryItem { word: "apple".into(), translation: "tao".into(), direction: "en-vi".into(), ipa: String::new(), pos: String::new() };
+        let item = HistoryItem { word: "apple".into(), translation: "tao".into(), direction: "en-vi".into(), ipa: String::new(), pos: String::new(), kind: String::new(), vocab: Vec::new() };
         let legacy = base.join("history.json");
         save_file(&legacy, &[item.clone()]).unwrap();
         let a = scoped_path(base.clone(), "70726f64/61").unwrap();

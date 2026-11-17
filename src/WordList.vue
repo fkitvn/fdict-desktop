@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import SpeakButton from "./SpeakButton.vue";
+import { markSentence } from "./marks.js";
 
 const PAGE_SIZE = 80;
 const STATUS_NEXT = { new: "learning", learning: "mastered", mastered: "new" };
@@ -69,6 +70,12 @@ const pagedWords = computed(() => {
 const totalWords = computed(() => collections.value.reduce((n, c) => n + (c.wordCount || 0), 0));
 const totalSentences = computed(() => collections.value.reduce((n, c) => n + (c.sentenceCount || 0), 0));
 const study = ref(null);
+
+function sentenceMarks(sentence) {
+  const names = words.value.map((word) => word.en).filter(Boolean);
+  if (detail.value?.en && !names.includes(detail.value.en)) names.unshift(detail.value.en);
+  return markSentence(sentence?.en, names);
+}
 
 function passLine(sentence) {
   const bit = (on, name) => `${name} ${on ? "xong" : "chưa"}`;
@@ -546,7 +553,9 @@ onMounted(async () => {
           <p class="vi">{{ detail.vi }}</p>
           <ul v-if="detail.sentences?.length" class="practice">
             <li v-for="s in detail.sentences" :key="s.en">
-              <p>{{ s.en }}</p>
+              <p>
+                <span v-for="(part, index) in sentenceMarks(s)" :key="index" :class="{ hit: part.on }">{{ part.text }}</span>
+              </p>
               <p v-if="s.ipa" class="ipa">{{ ipaText(s.ipa) }}</p>
               <p v-if="s.vi" class="example-vi">{{ s.vi }}</p>
               <p class="passes">{{ passLine(s) }}</p>
@@ -1021,6 +1030,12 @@ onMounted(async () => {
 .words .practice p {
   margin: 0;
   line-height: 1.45;
+}
+
+.words .practice .hit {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .words .practice .passes {

@@ -59,7 +59,7 @@ pub async fn auth_send_otp(app: AppHandle, email: String) -> Result<OtpSent, Str
 
     let (status, body) = post_json(
         &format!("{}/api/auth/sent-otp", crate::env::auth_origin(&app)),
-        json!({ "email": email }),
+        with_desktop(&app, json!({ "email": email })),
         None,
     )
     .await?;

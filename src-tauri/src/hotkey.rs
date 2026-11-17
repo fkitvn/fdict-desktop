@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -52,6 +51,10 @@ struct Lookup {
     example: String,
     example_vi: String,
     sentences: Vec<SentencePair>,
+    kind: String,
+    vocab: Vec<crate::history::HistoryVocab>,
+    #[serde(default)]
+    quiet: bool,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -60,8 +63,7 @@ struct SentencePair {
     vi: String,
 }
 
-/// Thông tin kèm theo của một lần tra. Khi đã đăng nhập, server làm đầy (cùng hàm với scan
-/// và Từ điển trên FDict One); app chỉ hiện.
+/// IPA kèm kết quả Gemini. Không còn câu ví dụ từ lần tra.
 #[derive(Clone, Default)]
 struct Details {
     ipa: String,
@@ -69,6 +71,11 @@ struct Details {
     example: String,
     example_vi: String,
     sentences: Vec<SentencePair>,
+    save_status: String,
+    save_message: String,
+    word_id: String,
+    kind: String,
+    vocab: Vec<crate::history::HistoryVocab>,
 }
 
 pub fn install(app: &tauri::App) -> tauri::Result<()> {
@@ -143,8 +150,12 @@ fn on_pressed(app: &AppHandle) {
         let Ok(_busy) = BUSY.try_lock() else {
             return;
         };
+        if crate::auth::bearer_token(&app).is_none() {
+            crate::tray::show_main(&app);
+            return;
+        }
         match capture_selection() {
-            Ok(Some(word)) => begin_lookup(app, word),
+            Ok(Some(word)) => begin_lookup(app, word, false),
             Ok(None) => open_compose(&app, ""),
             Err(message) => open_compose(&app, &message),
         }
@@ -153,47 +164,44 @@ fn on_pressed(app: &AppHandle) {
 
 fn open_compose(app: &AppHandle, message: &str) {
     crate::popup::show(app);
-    let _ = app.emit("lookup", &lookup_message("compose", "", message));
+    let _ = app.emit("lookup", &lookup_message("compose", "", message, false));
 }
 
-fn begin_lookup(app: AppHandle, word: String) {
+fn begin_lookup(app: AppHandle, word: String, quiet: bool) {
     let identity = crate::auth::history_identity(&app);
-    crate::popup::show(&app);
-    let _ = app.emit("lookup", &lookup_loading(&word));
+    // Phim tat mo popup. Tra ngay tren cua so chinh thi giu nguyen man hinh.
+    if !quiet {
+        crate::popup::show(&app);
+    }
+    let _ = app.emit("lookup", &lookup_loading(&word, quiet));
     tauri::async_runtime::spawn(async move {
-        // Đã đăng nhập: server tra và làm đầy thông tin. Chưa đăng nhập: tra tại máy như cũ.
+        // Mọi lần tra đi qua server (Gemini) và bắt buộc đã đăng nhập.
         let token = identity.as_ref().map(|(_, token)| token.trim().to_string()).filter(|token| !token.is_empty());
-        let result = match token.as_deref() {
-            Some(token) => lookup_server(&app, token, &word).await,
-            None => lookup_local(&word).await,
-        };
+        if token.is_none() {
+            let _ = app.emit("lookup", lookup_message("error", &word, "Hãy đăng nhập để tra từ.", quiet));
+            return;
+        }
+        let result = lookup_server(&app, token.as_deref(), &word).await;
         let next = match result {
             Ok((translation, direction, details)) => {
                 // Drop results when login changed during translation.
                 if crate::auth::history_identity(&app) != identity { return; }
                 if let Some((owner, _)) = &identity {
-                    crate::history::record(&app, owner, &word, &translation, &direction, &details.ipa, &details.pos);
+                    crate::history::record(
+                        &app,
+                        owner,
+                        &word,
+                        &translation,
+                        &direction,
+                        &details.ipa,
+                        &details.pos,
+                        &details.kind,
+                        &details.vocab,
+                    );
                 }
-                let ready = lookup_ready(&word, &translation, &direction, "", "", "", &details);
-                let _ = app.emit("lookup", &ready);
-                let (save_status, save_message, word_id) = crate::vocab::save_pair(
-                    &app,
-                    identity.as_ref().map(|(_, token)| token.as_str()),
-                    &word,
-                    &translation,
-                    &direction,
-                    &details.ipa,
-                    &details.pos,
-                    &details.example,
-                    &details.example_vi,
-                )
-                .await;
-                if save_status.is_empty() {
-                    return;
-                }
-                lookup_ready(&word, &translation, &direction, &save_status, &save_message, &word_id, &details)
+                lookup_ready(&word, &translation, &direction, &details.save_status, &details.save_message, &details.word_id, &details, quiet)
             }
-            Err(message) => lookup_message("error", &word, &message),
+            Err(message) => lookup_message("error", &word, &message, quiet),
         };
         if crate::auth::history_identity(&app) == identity {
             let _ = app.emit("lookup", next);
@@ -202,13 +210,16 @@ fn begin_lookup(app: AppHandle, word: String) {
 }
 
 #[tauri::command]
-pub fn lookup_text(app: AppHandle, word: String) -> Result<(), String> {
+pub fn lookup_text(app: AppHandle, word: String, quiet: Option<bool>) -> Result<(), String> {
     let word = normalize_selection(&word).ok_or_else(|| "Hãy nhập một từ hoặc một câu ngắn.".to_string())?;
-    begin_lookup(app, word);
+    if crate::auth::bearer_token(&app).is_none() {
+        return Err("Hãy đăng nhập để tra từ.".into());
+    }
+    begin_lookup(app, word, quiet.unwrap_or(false));
     Ok(())
 }
 
-fn lookup_loading(word: &str) -> Lookup {
+fn lookup_loading(word: &str, quiet: bool) -> Lookup {
     Lookup {
         status: "loading".into(),
         word: word.into(),
@@ -223,10 +234,13 @@ fn lookup_loading(word: &str) -> Lookup {
         example: String::new(),
         example_vi: String::new(),
         sentences: Vec::new(),
+        kind: String::new(),
+        vocab: Vec::new(),
+        quiet,
     }
 }
 
-fn lookup_ready(word: &str, translation: &str, direction: &str, save_status: &str, save_message: &str, word_id: &str, details: &Details) -> Lookup {
+fn lookup_ready(word: &str, translation: &str, direction: &str, save_status: &str, save_message: &str, word_id: &str, details: &Details, quiet: bool) -> Lookup {
     Lookup {
         status: "ready".into(),
         word: word.into(),
@@ -241,10 +255,13 @@ fn lookup_ready(word: &str, translation: &str, direction: &str, save_status: &st
         example: details.example.clone(),
         example_vi: details.example_vi.clone(),
         sentences: details.sentences.clone(),
+        kind: details.kind.clone(),
+        vocab: details.vocab.clone(),
+        quiet,
     }
 }
 
-fn lookup_message(status: &str, word: &str, message: &str) -> Lookup {
+fn lookup_message(status: &str, word: &str, message: &str, quiet: bool) -> Lookup {
     Lookup {
         status: status.into(),
         word: word.into(),
@@ -259,6 +276,9 @@ fn lookup_message(status: &str, word: &str, message: &str) -> Lookup {
         example: String::new(),
         example_vi: String::new(),
         sentences: Vec::new(),
+        kind: String::new(),
+        vocab: Vec::new(),
+        quiet,
     }
 }
 
@@ -395,13 +415,91 @@ fn hotkey_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Tra qua server (/api/words/lookup): nghĩa, phiên âm, loại từ, câu ví dụ và nghĩa câu ví dụ
-/// đều do server làm đầy. App không tự gọi từ điển ngoài khi đã đăng nhập.
-async fn lookup_server(app: &AppHandle, token: &str, word: &str) -> Result<(String, String, Details), String> {
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LookupPrefs {
+    #[serde(default = "prefs_on")]
+    stick_context: bool,
+    #[serde(default = "prefs_on")]
+    stick_topics: bool,
+}
+
+fn prefs_on() -> bool {
+    true
+}
+
+fn default_prefs() -> LookupPrefs {
+    LookupPrefs { stick_context: true, stick_topics: true }
+}
+
+fn prefs_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let mut dir = app.path().app_data_dir().map_err(|err| err.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+    dir.push("lookup-prefs.json");
+    Ok(dir)
+}
+
+fn load_prefs(app: &AppHandle) -> LookupPrefs {
+    let Ok(path) = prefs_path(app) else {
+        return default_prefs();
+    };
+    let Ok(raw) = std::fs::read(path) else {
+        return default_prefs();
+    };
+    serde_json::from_slice::<LookupPrefs>(&raw).unwrap_or_else(|_| default_prefs())
+}
+
+fn save_prefs(app: &AppHandle, prefs: &LookupPrefs) -> Result<(), String> {
+    let path = prefs_path(app)?;
+    let raw = serde_json::to_vec(prefs).map_err(|err| err.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, raw).map_err(|err| err.to_string())?;
+    if path.exists() {
+        let _ = std::fs::remove_file(&path);
+    }
+    std::fs::rename(tmp, path).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn lookup_prefs_snapshot(app: AppHandle) -> LookupPrefs {
+    load_prefs(&app)
+}
+
+#[tauri::command]
+pub fn lookup_prefs_set(app: AppHandle, stick_context: Option<bool>, stick_topics: Option<bool>) -> Result<LookupPrefs, String> {
+    let mut prefs = load_prefs(&app);
+    if let Some(value) = stick_context {
+        prefs.stick_context = value;
+    }
+    if let Some(value) = stick_topics {
+        prefs.stick_topics = value;
+    }
+    save_prefs(&app, &prefs)?;
+    Ok(prefs)
+}
+
+/// Tra qua server (/api/words/lookup): Gemini trả nghĩa và phiên âm. Không có câu ví dụ.
+/// stickContext / stickTopics quyết định prompt có recent và topic hay không.
+async fn lookup_server(app: &AppHandle, token: Option<&str>, word: &str) -> Result<(String, String, Details), String> {
     let dir = if is_vietnamese(word) { "vi-en" } else { "en-vi" };
+    let prefs = load_prefs(app);
+    let (auto_add, collection_id) = crate::vocab::lookup_save(app);
+    let mut payload = serde_json::json!({
+        "q": word,
+        "dir": dir,
+        "stickContext": prefs.stick_context,
+        "stickTopics": prefs.stick_topics,
+        "autoAdd": auto_add,
+    });
+    if !collection_id.is_empty() {
+        payload["collectionId"] = serde_json::json!(collection_id);
+    }
+    let Some(token) = token.filter(|value| !value.is_empty()) else {
+        return Err("Hãy đăng nhập để tra từ.".into());
+    };
     let (status, body) = crate::auth::post_json(
         &format!("{}/api/words/lookup", crate::env::dict_origin(app)),
-        serde_json::json!({ "q": word, "dir": dir }),
+        payload,
         Some(token),
     )
     .await?;
@@ -411,6 +509,7 @@ async fn lookup_server(app: &AppHandle, token: &str, word: &str) -> Result<(Stri
         401 => return Err("Hãy đăng nhập lại để tra từ.".into()),
         404 => return Err("Không tìm thấy từ này.".into()),
         429 => return Err("Tra nhanh quá. Thử lại sau ít phút.".into()),
+        503 => return Err("Máy chủ chưa cấu hình tra từ.".into()),
         _ => return Err("Máy chủ chưa tra được từ này.".into()),
     }
     let text = |key: &str| body.get(key).and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
@@ -419,201 +518,60 @@ async fn lookup_server(app: &AppHandle, token: &str, word: &str) -> Result<(Stri
     if translation.is_empty() {
         return Err("Chưa dịch được từ này.".into());
     }
-    let sentences = body
-        .get("sentences")
-        .and_then(|value| value.as_array())
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(|item| {
-                    let en = item.get("en").and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
-                    let vi = item.get("vi").and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
-                    if en.is_empty() { None } else { Some(SentencePair { en, vi }) }
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let collection = text("collectionId");
+    if !collection.is_empty() && crate::auth::bearer_token(app).as_deref() == Some(token) {
+        crate::vocab::remember_collection(app, &collection);
+    }
     Ok((
         translation,
         direction,
-        Details { ipa: text("ipa"), pos: text("pos"), example: text("example"), example_vi: text("example_vi"), sentences },
+        Details {
+            ipa: text("ipa"),
+            pos: String::new(),
+            example: String::new(),
+            example_vi: String::new(),
+            sentences: Vec::new(),
+            save_status: text("saveStatus"),
+            save_message: text("saveMessage"),
+            word_id: text("wordId"),
+            kind: read_kind(&body),
+            vocab: read_vocab(&body),
+        },
     ))
 }
 
-/// Chưa đăng nhập: tra tại máy (MyMemory + dictionaryapi). Không lưu từ, không sinh câu AI.
-async fn lookup_local(word: &str) -> Result<(String, String, Details), String> {
-    let lex_task = if is_vietnamese(word) {
-        None
-    } else {
-        let english = word.to_string();
-        Some(tauri::async_runtime::spawn(async move { lexicon(&english).await }))
-    };
-    let (translation, direction) = translate(word).await?;
-    let (ipa, pos) = if let Some(task) = lex_task {
-        task.await.unwrap_or_default()
-    } else {
-        lexicon(&translation).await
-    };
-    Ok((translation, direction, Details { ipa, pos, ..Default::default() }))
+fn read_kind(body: &serde_json::Value) -> String {
+    match body.get("type").and_then(|value| value.as_str()).unwrap_or("") {
+        "word" | "phrase" | "sentence" => body.get("type").and_then(|value| value.as_str()).unwrap_or("").to_string(),
+        _ => String::new(),
+    }
 }
 
-async fn translate(word: &str) -> Result<(String, String), String> {
-    let vietnamese = is_vietnamese(word);
-    let pair = if vietnamese { "vi|en" } else { "en|vi" };
-    let direction = if vietnamese { "vi-en" } else { "en-vi" };
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(12))
-        .build()
-        .map_err(|_| "Không mở được kết nối mạng.".to_string())?;
-    let url = format!(
-        "https://api.mymemory.translated.net/get?q={}&langpair={}",
-        form_encode(word),
-        form_encode(pair),
-    );
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|_| "Chưa kết nối được máy chủ dịch.".to_string())?;
-    if !response.status().is_success() {
-        return Err("Chưa dịch được từ này.".into());
+fn read_vocab(body: &serde_json::Value) -> Vec<crate::history::HistoryVocab> {
+    if read_kind(body) != "sentence" {
+        return Vec::new();
     }
-    let body = response.json::<Value>().await.map_err(|_| "Kết quả dịch không đọc được.".to_string())?;
-    let text = body
-        .get("responseData")
-        .and_then(|data| data.get("translatedText"))
-        .and_then(|value| value.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    if text.is_empty() || text.contains("MYMEMORY WARNING") {
-        return Err("Đã hết lượt dịch. Thử lại sau.".into());
-    }
-    Ok((unescape(&text), direction.into()))
+    let Some(list) = body.get("vocab").and_then(|value| value.as_array()) else {
+        return Vec::new();
+    };
+    list.iter()
+        .filter_map(|item| {
+            let en = item.get("en").and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
+            if en.is_empty() {
+                return None;
+            }
+            Some(crate::history::HistoryVocab {
+                en,
+                vi: item.get("vi").and_then(|value| value.as_str()).unwrap_or("").trim().to_string(),
+                ipa: item.get("ipa").and_then(|value| value.as_str()).unwrap_or("").trim().to_string(),
+            })
+        })
+        .take(12)
+        .collect()
 }
 
 fn is_vietnamese(word: &str) -> bool {
     word.chars().any(|ch| "ăâêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵđĂÂÊÔƠƯÁÀẢÃẠẤẦẨẪẬẮẰẲẴẶÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴĐ".contains(ch))
-}
-
-async fn lexicon(english: &str) -> (String, String) {
-    let Some(query) = lexicon_query(english) else {
-        return (String::new(), String::new());
-    };
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .build();
-    let Ok(client) = client else {
-        return (String::new(), String::new());
-    };
-    let url = format!("https://api.dictionaryapi.dev/api/v2/entries/en/{}", form_encode(&query));
-    let Ok(response) = client.get(&url).send().await else {
-        return (String::new(), String::new());
-    };
-    if !response.status().is_success() {
-        return (String::new(), String::new());
-    }
-    let Ok(body) = response.json::<Value>().await else {
-        return (String::new(), String::new());
-    };
-    let Some(entry) = body.as_array().and_then(|items| items.first()) else {
-        return (String::new(), String::new());
-    };
-    (ipa_of(entry), pos_of(entry))
-}
-
-fn lexicon_query(value: &str) -> Option<String> {
-    let text = value.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.is_empty() || text.chars().count() > 40 {
-        return None;
-    }
-    let parts = text.split(' ').filter(|part| !part.is_empty()).collect::<Vec<_>>();
-    if parts.is_empty() || parts.len() > 2 {
-        return None;
-    }
-    let letters = parts.iter().all(|part| part.chars().all(|ch| ch.is_ascii_alphabetic() || ch == '-' || ch == '\''));
-    if !letters {
-        return None;
-    }
-    Some(text)
-}
-
-fn ipa_of(entry: &Value) -> String {
-    let from_list = entry
-        .get("phonetics")
-        .and_then(|value| value.as_array())
-        .and_then(|items| {
-            items.iter().find_map(|item| {
-                let text = item.get("text").and_then(|value| value.as_str()).unwrap_or("").trim();
-                if text.is_empty() { None } else { Some(text.to_string()) }
-            })
-        })
-        .unwrap_or_default();
-    let raw = if from_list.trim().is_empty() {
-        entry.get("phonetic").and_then(|value| value.as_str()).unwrap_or("")
-    } else {
-        from_list.as_str()
-    };
-    // Giu dau / cua tu dien. Chi bo [ ] (mot so muc dung ngoac vuong). Server moi la cho chuan hoa khi luu.
-    raw.trim().trim_matches(|ch| ch == '[' || ch == ']').trim().to_string()
-}
-
-fn pos_of(entry: &Value) -> String {
-    let Some(meanings) = entry.get("meanings").and_then(|value| value.as_array()) else {
-        return String::new();
-    };
-    let mut labels = Vec::new();
-    for meaning in meanings {
-        let Some(label) = meaning.get("partOfSpeech").and_then(|value| value.as_str()).and_then(pos_label) else {
-            continue;
-        };
-        if !labels.contains(&label) {
-            labels.push(label);
-        }
-        if labels.len() == 3 {
-            break;
-        }
-    }
-    labels.join(", ")
-}
-
-fn pos_label(value: &str) -> Option<&'static str> {
-    match value {
-        "noun" => Some("danh từ"),
-        "verb" => Some("động từ"),
-        "adjective" => Some("tính từ"),
-        "adverb" => Some("trạng từ"),
-        "pronoun" => Some("đại từ"),
-        "preposition" => Some("giới từ"),
-        "conjunction" => Some("liên từ"),
-        "interjection" | "exclamation" => Some("thán từ"),
-        "article" => Some("mạo từ"),
-        "determiner" => Some("hạn định từ"),
-        "numeral" | "number" => Some("số từ"),
-        "particle" => Some("trợ từ"),
-        _ => None,
-    }
-}
-
-fn form_encode(value: &str) -> String {
-    let mut out = String::new();
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(byte as char),
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
-}
-
-fn unescape(value: &str) -> String {
-    value
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace("&apos;", "'")
-        .replace("&amp;", "&")
 }
 
 #[cfg(windows)]

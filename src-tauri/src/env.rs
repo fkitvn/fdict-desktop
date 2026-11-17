@@ -2,7 +2,7 @@ use serde::Serialize;
 use tauri::AppHandle;
 
 // Ghi chu: .env.development va .env.production duoc nhung thang vao binary (include_str!).
-// Cac file nay chi chua duong dan may chu (FDICT_API_BASE, FDICT_DICT_API_BASE), khong chua bi mat hay thong tin nhay cam.
+// Moi API, ke ca dang nhap, tro fdict-web-app qua FDICT_DICT_API_BASE. Khong chua bi mat.
 // Viec nhung nay da duoc chu so huu (anh Thinh) dong y ngay 25/10/2026. Khong them secret vao cac file .env nay.
 const DEV_FILE: &str = include_str!("../../.env.development");
 const PROD_FILE: &str = include_str!("../../.env.production");
@@ -26,6 +26,7 @@ pub fn current(_app: &AppHandle) -> Profile {
     profile(&active_name())
 }
 
+/// Cung host voi dict_origin: fdict-web-app tu xu ly OTP va JWT desktop.
 pub fn auth_origin(app: &AppHandle) -> String {
     current(app).auth
 }
@@ -56,34 +57,28 @@ fn active_name() -> String {
 }
 
 fn profile(name: &str) -> Profile {
-    // Lab: may chu dev chay tren may Bio, mo ra ngoai qua Cloudflare Tunnel (xem README.md, muc Lab).
+    // Moi API (dang nhap, tu vung, may, cap nhat) deu di fdict-web-app.
+    // Lab: tunnel cua web-app (xem README.md).
     if name == "lab" {
+        let dict = "https://fdict-dev.joinnow.vn".to_string();
         return Profile {
             name: name.into(),
-            auth: "https://fkit-dev.joinnow.vn".into(),
-            dict: "https://fdict-dev.joinnow.vn".into(),
+            auth: dict.clone(),
+            dict,
         };
     }
     let raw = if name == "production" { PROD_FILE } else { DEV_FILE };
-    let (mut auth, mut dict) = parse(raw);
-    if name == "production" {
-        if auth.is_empty() {
-            auth = "https://fkit.vn".into();
-        }
-        if dict.is_empty() {
-            dict = "https://dict.fkit.vn".into();
-        }
-    } else {
-        if auth.is_empty() {
-            auth = "http://127.0.0.1:8000".into();
-        }
-        if dict.is_empty() {
-            dict = "http://127.0.0.1:8001".into();
-        }
+    let (_auth, mut dict) = parse(raw);
+    if dict.is_empty() {
+        dict = if name == "production" {
+            "https://dict.fkit.vn".into()
+        } else {
+            "http://127.0.0.1:8001".into()
+        };
     }
     Profile {
         name: name.into(),
-        auth,
+        auth: dict.clone(),
         dict,
     }
 }

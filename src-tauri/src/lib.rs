@@ -41,6 +41,8 @@ pub fn run() {
             hotkey::hotkey_resume,
             hotkey::hotkey_set,
             hotkey::lookup_text,
+            hotkey::lookup_prefs_snapshot,
+            hotkey::lookup_prefs_set,
             history::history_list,
             vocab::vocab_snapshot,
             vocab::vocab_set,
