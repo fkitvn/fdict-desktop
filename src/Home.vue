@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
             </p>
             <p v-if="item.kind === 'sentence' && item.vocab?.length" class="roots">
               <span>Từ vựng</span>
-              <span v-for="hit in item.vocab" :key="hit.en">{{ hit.en }}<template v-if="hit.vi"> · {{ hit.vi }}</template></span>
+              <span v-for="hit in item.vocab" :key="hit.en">{{ hit.en }}<template v-if="hit.pos"> · {{ hit.pos }}</template><template v-if="hit.vi"> · {{ hit.vi }}</template></span>
             </p>
           </div>
           <SpeakButton :text="item.direction === 'vi-en' ? item.translation : item.word" />

@@ -13,6 +13,8 @@ pub struct HistoryVocab {
     pub en: String,
     pub vi: String,
     pub ipa: String,
+    #[serde(default)]
+    pub pos: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

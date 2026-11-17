@@ -527,7 +527,7 @@ async fn lookup_server(app: &AppHandle, token: Option<&str>, word: &str) -> Resu
         direction,
         Details {
             ipa: text("ipa"),
-            pos: String::new(),
+            pos: text("pos"),
             example: String::new(),
             example_vi: String::new(),
             sentences: Vec::new(),
@@ -564,6 +564,7 @@ fn read_vocab(body: &serde_json::Value) -> Vec<crate::history::HistoryVocab> {
                 en,
                 vi: item.get("vi").and_then(|value| value.as_str()).unwrap_or("").trim().to_string(),
                 ipa: item.get("ipa").and_then(|value| value.as_str()).unwrap_or("").trim().to_string(),
+                pos: item.get("pos").and_then(|value| value.as_str()).unwrap_or("").trim().to_string(),
             })
         })
         .take(12)
