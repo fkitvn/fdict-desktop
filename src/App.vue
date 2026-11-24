@@ -8,6 +8,7 @@ import Home from "./Home.vue";
 import Intro from "./Intro.vue";
 import Settings from "./Settings.vue";
 import WordList from "./WordList.vue";
+import { loadUiLang, t } from "./ui-text.js";
 
 const view = ref({
   phase: "loading",
@@ -45,7 +46,7 @@ const clock = computed(() => {
 });
 
 const resendLabel = computed(() =>
-  remain.value > 0 ? `Gửi lại sau ${clock.value}` : "Gửi lại mã",
+  remain.value > 0 ? t("auth.resendIn", { time: clock.value }) : t("auth.resend"),
 );
 
 const initial = computed(() => {
@@ -64,7 +65,7 @@ function startCountdown(seconds) {
 }
 
 function invokeError(error) {
-  return typeof error === "string" ? error : "Không kết nối được máy chủ.";
+  return typeof error === "string" ? error : t("error.server");
 }
 
 async function refreshHotkey() {
@@ -109,6 +110,7 @@ async function fitDesktop() {
 }
 
 onMounted(async () => {
+  loadUiLang();
   fitDesktop();
   try {
     stopAuth = await listen("auth-changed", (event) => {
@@ -248,7 +250,7 @@ async function signOut() {
           :class="{ on: screen === 'home' }"
           @click="goHome"
         >
-          Trang chủ
+          {{ t("nav.home") }}
         </button>
         <button
           v-if="view.phase === 'welcome'"
@@ -256,7 +258,7 @@ async function signOut() {
           :class="{ on: screen === 'words' }"
           @click="screen = 'words'"
         >
-          Bộ sưu tập
+          {{ t("nav.words") }}
         </button>
         <button
           v-if="view.phase === 'welcome'"
@@ -264,14 +266,14 @@ async function signOut() {
           :class="{ on: screen === 'devices' }"
           @click="screen = 'devices'"
         >
-          Thiết bị đã kết nối
+          {{ t("nav.devices") }}
         </button>
         <button
           type="button"
           :class="{ on: screen === 'settings' }"
           @click="screen = 'settings'"
         >
-          Cài đặt
+          {{ t("nav.settings") }}
         </button>
       </nav>
       <div class="aside-foot">
@@ -280,10 +282,8 @@ async function signOut() {
           class="restart"
           type="button"
           :disabled="updating"
-          :aria-label="
-            updating ? 'Đang tải bản mới' : 'Khởi động lại để nâng cấp'
-          "
-          :title="updating ? 'Đang tải bản mới' : 'Khởi động lại để nâng cấp'"
+          :aria-label="updating ? t('update.downloading') : t('update.restart')"
+          :title="updating ? t('update.downloading') : t('update.restart')"
           @click="restartToUpgrade"
         >
           <svg
@@ -304,14 +304,14 @@ async function signOut() {
           />
           <span v-else class="avatar">{{ initial }}</span>
           <div class="who">
-            <p>Xin chào</p>
-            <strong>{{ view.name || "bạn" }}</strong>
+            <p>{{ t("account.hello") }}</p>
+            <strong>{{ view.name || t("account.you") }}</strong>
           </div>
           <button
             class="signout"
             type="button"
-            aria-label="Đăng xuất"
-            title="Đăng xuất"
+            :aria-label="t('account.signOut')"
+            :title="t('account.signOut')"
             :disabled="busy"
             @click="askSignOut"
           >
@@ -345,7 +345,7 @@ async function signOut() {
       />
 
       <section v-else-if="view.phase === 'loading'" class="panel">
-        <p class="lead">Đang mở phiên…</p>
+        <p class="lead">{{ t("auth.opening") }}</p>
       </section>
 
       <Intro
@@ -359,24 +359,24 @@ async function signOut() {
         class="panel"
         @submit.prevent="sendOtp"
       >
-        <h1>Đăng nhập</h1>
-        <p class="lead">Cá nhân hoá trải nghiệm học tập của bạn.</p>
+        <h1>{{ t("auth.signIn") }}</h1>
+        <p class="lead">{{ t("auth.signInLead") }}</p>
         <input
           v-model="email"
           type="email"
           autocomplete="email"
-          placeholder="emailcuaban@example.com"
+          :placeholder="t('auth.emailPh')"
           required
         />
         <button class="primary" type="submit" :disabled="busy">
-          {{ busy ? "Đang gửi mã…" : "Gửi mã xác thực" }}
+          {{ busy ? t("auth.sending") : t("auth.sendCode") }}
         </button>
         <p v-if="message" class="note">{{ message }}</p>
       </form>
 
       <form v-else class="panel" @submit.prevent="verifyOtp">
-        <h1>Nhập mã xác thực</h1>
-        <p class="lead">Mã 6 chữ số đã gửi tới {{ email }}.</p>
+        <h1>{{ t("auth.enterCode") }}</h1>
+        <p class="lead">{{ t("auth.codeSent", { email }) }}</p>
         <input
           v-model="otp"
           class="code"
@@ -391,7 +391,7 @@ async function signOut() {
           type="submit"
           :disabled="busy || otp.length !== 6"
         >
-          {{ busy ? "Đang xác nhận…" : "Xác nhận" }}
+          {{ busy ? t("auth.verifying") : t("auth.confirm") }}
         </button>
         <button type="button" :disabled="busy || remain > 0" @click="sendOtp">
           {{ resendLabel }}
@@ -402,7 +402,7 @@ async function signOut() {
           :disabled="busy"
           @click="changeEmail"
         >
-          Đổi email
+          {{ t("auth.changeEmail") }}
         </button>
         <p v-if="message" class="note">{{ message }}</p>
       </form>
@@ -418,12 +418,12 @@ async function signOut() {
     @click.self="confirmSignOut = false"
   >
     <div class="confirm-card">
-      <h2 id="signout-title">Đăng xuất?</h2>
-      <p>Bạn sẽ cần mã OTP để đăng nhập lại.</p>
+      <h2 id="signout-title">{{ t("account.signOutAsk") }}</h2>
+      <p>{{ t("account.signOutBody") }}</p>
       <div class="confirm-actions">
-        <button type="button" @click="confirmSignOut = false">Huỷ</button>
+        <button type="button" @click="confirmSignOut = false">{{ t("common.cancelAlt") }}</button>
         <button type="button" class="primary" :disabled="busy" @click="signOut">
-          Đăng xuất
+          {{ t("account.signOut") }}
         </button>
       </div>
     </div>

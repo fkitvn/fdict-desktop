@@ -3,15 +3,16 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { setTheme, themePreference } from "./theme.js";
+import { setUiLang, t, UI_LANGS, uiLang } from "./ui-text.js";
 
 const props = defineProps({ signedIn: Boolean, accountKey: { type: String, default: "" } });
 
 const theme = ref("system");
-const themes = [
-  { value: "light", label: "Sáng" },
-  { value: "dark", label: "Tối" },
-  { value: "system", label: "Hệ thống" },
-];
+const themes = computed(() => [
+  { value: "light", label: t("theme.light") },
+  { value: "dark", label: t("theme.dark") },
+  { value: "system", label: t("theme.system") },
+]);
 const hotkeyLabel = ref("Alt + Q");
 const capturing = ref(false);
 const hotkeyMessage = ref("");
@@ -22,14 +23,14 @@ const autoUpdate = ref(true);
 const autostart = ref(true);
 const collections = ref([]);
 const learnLang = ref("en");
-const learnLangs = [
-  { value: "en", label: "Tiếng Anh" },
-  { value: "fr", label: "Tiếng Pháp" },
-];
+const learnLangs = computed(() => [
+  { value: "en", label: t("lang.en") },
+  { value: "fr", label: t("lang.fr") },
+]);
 const pendingLang = ref("");
 const langBusy = ref(false);
-const pendingLabel = computed(() => (pendingLang.value === "fr" ? "Tiếng Pháp" : "Tiếng Anh"));
-const currentLabel = computed(() => (learnLang.value === "fr" ? "Tiếng Pháp" : "Tiếng Anh"));
+const pendingLabel = computed(() => (pendingLang.value === "fr" ? t("lang.fr") : t("lang.en")));
+const currentLabel = computed(() => (learnLang.value === "fr" ? t("lang.fr") : t("lang.en")));
 const saveCollectionId = ref("");
 const colsLoading = ref(false);
 const colsError = ref("");
@@ -38,7 +39,7 @@ const creatingCollection = ref(false);
 let stopUpdate = null;
 
 function invokeError(error) {
-  return typeof error === "string" ? error : "Không kết nối được máy chủ.";
+  return typeof error === "string" ? error : t("error.server");
 }
 
 async function chooseTheme(value) {
@@ -53,7 +54,7 @@ async function checkUpdate() {
     if (update.value?.installing) updating.value = true;
   } catch (error) {
     update.value = null;
-    updateMessage.value = typeof error === "string" && error.trim() ? error : "Chưa kiểm tra được phiên bản.";
+    updateMessage.value = typeof error === "string" && error.trim() ? error : t("settings.versionFail");
   }
 }
 
@@ -75,7 +76,7 @@ async function toggleAutoUpdate() {
   try {
     autoUpdate.value = (await invoke("update_auto_set", { enabled })).enabled;
   } catch (error) {
-    updateMessage.value = typeof error === "string" && error.trim() ? error : "Không lưu được lựa chọn.";
+    updateMessage.value = typeof error === "string" && error.trim() ? error : t("settings.saveChoiceFail");
     return;
   }
   if (autoUpdate.value && update.value?.available) installUpdate();
@@ -87,7 +88,7 @@ async function installUpdate() {
   try {
     await invoke("update_install");
   } catch (error) {
-    updateMessage.value = typeof error === "string" && error.trim() ? error : "Không nâng cấp được.";
+    updateMessage.value = typeof error === "string" && error.trim() ? error : t("settings.upgradeFail");
     updating.value = false;
   }
 }
@@ -98,11 +99,11 @@ function onHotkeyKeydown(event) {
   if (event.repeat || ["Alt", "Control", "Shift", "Meta"].includes(event.key)) return;
   const code = event.code;
   if (!/^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2]))$/.test(code)) {
-    hotkeyMessage.value = "Chỉ dùng chữ, số hoặc phím F.";
+    hotkeyMessage.value = t("settings.hotkeyKeys");
     return;
   }
   if (!event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey) {
-    hotkeyMessage.value = "Hãy giữ thêm Alt, Ctrl hoặc Shift.";
+    hotkeyMessage.value = t("settings.hotkeyMods");
     return;
   }
   capturing.value = false;
@@ -136,8 +137,8 @@ async function loadLearnLang() {
     return;
   }
   try {
-    const t = await invoke("settings_target");
-    learnLang.value = t === "fr" ? "fr" : "en";
+    const target = await invoke("settings_target");
+    learnLang.value = target === "fr" ? "fr" : "en";
   } catch {
     /* giữ trạng thái hiện tại */
   }
@@ -307,12 +308,12 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="settings">
-    <h1>Cài đặt</h1>
+    <h1>{{ t("settings.title") }}</h1>
 
     <article class="setting">
       <div>
-        <h2>Giao diện</h2>
-        <p>Sáng, tối, hoặc theo máy tính.</p>
+        <h2>{{ t("settings.appearance") }}</h2>
+        <p>{{ t("settings.appearanceHint") }}</p>
       </div>
       <div class="choices">
         <button
@@ -329,26 +330,45 @@ onBeforeUnmount(() => {
 
     <article class="setting">
       <div>
-        <h2>Phím dịch</h2>
-        <p v-if="capturing">Nhấn tổ hợp phím mới.</p>
-        <p v-else>Chọn một từ hoặc một câu ngắn, rồi nhấn {{ hotkeyLabel }}.</p>
+        <h2>{{ t("settings.uiLang") }}</h2>
+        <p>{{ t("settings.uiLangHint") }}</p>
+      </div>
+      <div class="choices tags">
+        <button
+          v-for="item in UI_LANGS"
+          :key="item.id"
+          type="button"
+          class="tag"
+          :class="{ on: uiLang === item.id }"
+          @click="setUiLang(item.id)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+    </article>
+
+    <article class="setting">
+      <div>
+        <h2>{{ t("settings.hotkey") }}</h2>
+        <p v-if="capturing">{{ t("settings.hotkeyCapture") }}</p>
+        <p v-else>{{ t("settings.hotkeyHint", { hotkey: hotkeyLabel }) }}</p>
         <p v-if="hotkeyMessage" class="note">{{ hotkeyMessage }}</p>
       </div>
       <div class="choices">
         <template v-if="capturing">
-          <button class="text" type="button" @click="stopCapture">Hủy</button>
+          <button class="text" type="button" @click="stopCapture">{{ t("common.cancel") }}</button>
         </template>
         <template v-else>
           <strong>{{ hotkeyLabel }}</strong>
-          <button type="button" @click="startCapture">Đổi</button>
+          <button type="button" @click="startCapture">{{ t("settings.change") }}</button>
         </template>
       </div>
     </article>
 
     <article v-if="signedIn" class="setting">
       <div>
-        <h2>Ngôn ngữ học</h2>
-        <p>Bộ từ và máy học theo ngôn ngữ này.</p>
+        <h2>{{ t("settings.learn") }}</h2>
+        <p>{{ t("settings.learnHint") }}</p>
       </div>
       <div class="choices tags">
         <button
@@ -366,31 +386,31 @@ onBeforeUnmount(() => {
 
     <article v-if="signedIn" class="setting">
       <div>
-        <h2>Bộ sưu tập lưu từ</h2>
-        <p>Từ lưu khi tìm kiếm nhanh sẽ vào bộ này.</p>
-        <p v-if="colsLoading">Đang tải bộ sưu tập…</p>
+        <h2>{{ t("settings.saveCol") }}</h2>
+        <p>{{ t("settings.saveColHint") }}</p>
+        <p v-if="colsLoading">{{ t("settings.colsLoading") }}</p>
         <p v-else-if="colsError" class="note">
           {{ colsError }}
-          <button type="button" class="text" @click="loadSaveCollection">Thử lại</button>
+          <button type="button" class="text" @click="loadSaveCollection">{{ t("common.retry") }}</button>
         </p>
         <template v-else-if="!collections.length">
-          <p>Bạn chưa có bộ sưu tập nào</p>
+          <p>{{ t("settings.noCols") }}</p>
           <form class="create-col" @submit.prevent="createSaveCollection">
             <input
               v-model="newCollectionName"
               type="text"
               maxlength="60"
-              placeholder="Tên bộ sưu tập"
+              :placeholder="t('settings.colNamePh')"
               :disabled="creatingCollection"
             />
             <button type="submit" :disabled="creatingCollection || !newCollectionName.trim()">
-              {{ creatingCollection ? "…" : "Tạo bộ sưu tập" }}
+              {{ creatingCollection ? "…" : t("settings.createCol") }}
             </button>
           </form>
         </template>
       </div>
       <div v-if="!colsLoading && !colsError && collections.length" class="choices">
-        <select :value="saveCollectionId" aria-label="Bộ sưu tập lưu từ" @change="chooseSaveCollection">
+        <select :value="saveCollectionId" :aria-label="t('settings.saveCol')" @change="chooseSaveCollection">
           <option v-for="col in collections" :key="col.id" :value="col.id">{{ col.name }}</option>
         </select>
       </div>
@@ -398,14 +418,14 @@ onBeforeUnmount(() => {
 
     <article class="setting">
       <div>
-        <h2>Khởi động cùng hệ điều hành</h2>
-        <p>Mở FDict khi bật máy và chạy ở khay hệ thống.</p>
+        <h2>{{ t("settings.autostart") }}</h2>
+        <p>{{ t("settings.autostartHint") }}</p>
       </div>
       <button
         type="button"
         class="switch"
         :class="{ on: autostart }"
-        aria-label="Khởi động cùng hệ điều hành"
+        :aria-label="t('settings.autostart')"
         @click="toggleAutostart"
       >
         <span class="switch-knob"></span>
@@ -413,16 +433,16 @@ onBeforeUnmount(() => {
     </article>
     <article class="setting">
       <div>
-        <h2>Phiên bản</h2>
-        <p v-if="updating">Đang tải bản mới…</p>
+        <h2>{{ t("settings.version") }}</h2>
+        <p v-if="updating">{{ t("update.downloadingDots") }}</p>
         <p v-else-if="update?.available">{{ update.current }} → {{ update.latest }}</p>
         <p v-else-if="update">{{ update.current }}</p>
         <p v-else-if="updateMessage">{{ updateMessage }}</p>
-        <p v-else>Đang kiểm tra…</p>
+        <p v-else>{{ t("update.checking") }}</p>
         <p v-if="update && updateMessage" class="note">{{ updateMessage }}</p>
         <div v-if="update?.available" class="choices upgrade">
           <button type="button" class="on" :disabled="updating" @click="installUpdate">
-            {{ updating ? "Đang tải…" : "Khởi động lại" }}
+            {{ updating ? t("update.downloadShort") : t("update.restartShort") }}
           </button>
         </div>
       </div>
@@ -430,7 +450,7 @@ onBeforeUnmount(() => {
         type="button"
         class="switch"
         :class="{ on: autoUpdate }"
-        aria-label="Tự động cập nhật"
+        :aria-label="t('settings.autoUpdate')"
         @click="toggleAutoUpdate"
       >
         <span class="switch-knob"></span>
@@ -447,14 +467,14 @@ onBeforeUnmount(() => {
     @click.self="cancelLearnLang"
   >
     <div class="confirm-card">
-      <h2 id="learn-lang-title">Đổi sang {{ pendingLabel }}?</h2>
+      <h2 id="learn-lang-title">{{ t("settings.learnAsk", { lang: pendingLabel }) }}</h2>
       <p>
-        Bộ từ trên máy học chuyển sang {{ pendingLabel }}. Từ {{ currentLabel }} vẫn còn trên tài khoản.
+        {{ t("settings.learnBody", { pending: pendingLabel, current: currentLabel }) }}
       </p>
       <div class="confirm-actions">
-        <button type="button" :disabled="langBusy" @click="cancelLearnLang">Huỷ</button>
+        <button type="button" :disabled="langBusy" @click="cancelLearnLang">{{ t("common.cancelAlt") }}</button>
         <button type="button" class="primary" :disabled="langBusy" @click="confirmLearnLang">
-          {{ langBusy ? "…" : "Đổi" }}
+          {{ langBusy ? "…" : t("settings.change") }}
         </button>
       </div>
     </div>

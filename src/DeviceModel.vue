@@ -1,5 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from "vue";
+import { t } from "./ui-text.js";
 
 defineProps({
   compact: { type: Boolean, default: false },
@@ -131,7 +132,7 @@ onMounted(async () => {
     ready.value = true;
     raf = requestAnimationFrame(tick);
   } catch (e) {
-    console.warn("[DeviceModel] Không tải được mô hình 3D:", e);
+    console.warn("[DeviceModel]", t("device.modelFail"), e);
   }
 });
 
@@ -169,7 +170,7 @@ onBeforeUnmount(() => {
     @pointercancel="pointerUp"
     @lostpointercapture="pointerUp"
   >
-    <div ref="host" class="host" :class="{ ready }" role="img" aria-label="Mô hình 3D FDict, kéo ngang để xoay"></div>
+    <div ref="host" class="host" :class="{ ready }" role="img" :aria-label="t('device.modelAria')"></div>
   </div>
 </template>
 
