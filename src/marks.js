@@ -1,8 +1,9 @@
+// Chap nhan ca chu Latin co dau (tieng Phap): a-z, à-ÿ, œ.
 function partsOf(word) {
   return String(word || "")
     .trim()
     .toLowerCase()
-    .split(/[^a-z']+/)
+    .split(/[^a-zà-ÿœ']+/)
     .filter(Boolean);
 }
 
@@ -16,7 +17,7 @@ function tokenHit(token, part) {
 function relatedWords(sentence, words) {
   const toks = String(sentence || "")
     .toLowerCase()
-    .split(/[^a-z']+/)
+    .split(/[^a-zà-ÿœ']+/)
     .filter(Boolean);
   const found = [];
   const seen = new Set();
@@ -42,10 +43,10 @@ export function markSentence(sentence, words) {
     .map(partsOf)
     .filter((parts) => parts.length)
     .sort((a, b) => b.length - a.length || b.join(" ").length - a.join(" ").length);
-  const tokens = text.match(/[A-Za-z']+|[^A-Za-z']+/g) || [];
+  const tokens = text.match(/[A-Za-zÀ-ÿŒœ']+|[^A-Za-zÀ-ÿŒœ']+/g) || [];
   const wordAt = [];
   tokens.forEach((token, index) => {
-    if (/^[A-Za-z']+$/.test(token)) wordAt.push(index);
+    if (/^[A-Za-zÀ-ÿŒœ']+$/.test(token)) wordAt.push(index);
   });
   const lower = wordAt.map((index) => tokens[index].toLowerCase());
   const on = new Set();

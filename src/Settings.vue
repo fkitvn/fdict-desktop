@@ -21,6 +21,11 @@ const updating = ref(false);
 const autoUpdate = ref(true);
 const autostart = ref(true);
 const collections = ref([]);
+const learnLang = ref("en");
+const learnLangs = [
+  { value: "en", label: "Tiếng Anh" },
+  { value: "fr", label: "Tiếng Pháp" },
+];
 const saveCollectionId = ref("");
 const colsLoading = ref(false);
 const colsError = ref("");
@@ -121,6 +126,34 @@ function onWindowBlur() {
   if (capturing.value) stopCapture();
 }
 
+async function loadLearnLang() {
+  if (!props.signedIn) {
+    learnLang.value = "en";
+    return;
+  }
+  try {
+    const t = await invoke("settings_target");
+    learnLang.value = t === "fr" ? "fr" : "en";
+  } catch {
+    /* giữ trạng thái hiện tại */
+  }
+}
+
+async function chooseLearnLang(value) {
+  const lang = value === "fr" ? "fr" : "en";
+  if (lang === learnLang.value) return;
+  const previous = learnLang.value;
+  learnLang.value = lang;
+  try {
+    learnLang.value = await invoke("settings_set_target", { target: lang });
+    // Bộ sưu tập theo ngôn ngữ mới: tải lại danh sách lưu từ.
+    loadSaveCollection();
+  } catch (error) {
+    learnLang.value = previous;
+    colsError.value = invokeError(error);
+  }
+}
+
 async function loadSaveCollection() {
   if (!props.signedIn) {
     collections.value = [];
@@ -189,6 +222,7 @@ async function createSaveCollection() {
 watch(
   () => [props.signedIn, props.accountKey],
   () => {
+    loadLearnLang();
     loadSaveCollection();
   },
 );
@@ -238,6 +272,7 @@ onMounted(async () => {
     stopUpdate = null;
   }
   checkUpdate();
+  loadLearnLang();
   loadSaveCollection();
 });
 
@@ -286,6 +321,24 @@ onBeforeUnmount(() => {
           <strong>{{ hotkeyLabel }}</strong>
           <button type="button" @click="startCapture">Đổi</button>
         </template>
+      </div>
+    </article>
+
+    <article v-if="signedIn" class="setting">
+      <div>
+        <h2>Ngôn ngữ học</h2>
+        <p>Chọn ngôn ngữ bạn muốn học. Đổi ngôn ngữ sẽ chuyển sang bộ từ của ngôn ngữ đó.</p>
+      </div>
+      <div class="choices">
+        <button
+          v-for="item in learnLangs"
+          :key="item.value"
+          type="button"
+          :class="{ on: learnLang === item.value }"
+          @click="chooseLearnLang(item.value)"
+        >
+          {{ item.label }}
+        </button>
       </div>
     </article>
 

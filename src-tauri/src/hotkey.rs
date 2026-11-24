@@ -481,7 +481,15 @@ pub fn lookup_prefs_set(app: AppHandle, stick_context: Option<bool>, stick_topic
 /// Tra qua server (/api/words/lookup): Gemini trả nghĩa và phiên âm. Không có câu ví dụ.
 /// stickContext / stickTopics quyết định prompt có recent và topic hay không.
 async fn lookup_server(app: &AppHandle, token: Option<&str>, word: &str) -> Result<(String, String, Details), String> {
-    let dir = if is_vietnamese(word) { "vi-en" } else { "en-vi" };
+    let Some(tok) = token.filter(|value| !value.is_empty()) else {
+        return Err("Hãy đăng nhập để tra từ.".into());
+    };
+    // Ngon ngu hoc cua tai khoan: 'en' hoac 'fr'. L2 = ngon ngu dich.
+    let target = crate::vocab::ensure_target(app, tok).await;
+    let l2 = if target == "fr" { "fr" } else { "en" };
+    // Nguon la tieng Viet -> vi-<l2>, nguoc lai <l2>-vi. Voi tieng Phap chi coi la Viet khi co dau rieng cua tieng Viet.
+    let from_vi = if l2 == "fr" { is_vietnamese_only(word) } else { is_vietnamese(word) };
+    let dir = if from_vi { format!("vi-{l2}") } else { format!("{l2}-vi") };
     let prefs = load_prefs(app);
     let (auto_add, collection_id) = crate::vocab::lookup_save(app);
     let mut payload = serde_json::json!({
@@ -513,8 +521,10 @@ async fn lookup_server(app: &AppHandle, token: Option<&str>, word: &str) -> Resu
         _ => return Err("Máy chủ chưa tra được từ này.".into()),
     }
     let text = |key: &str| body.get(key).and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
-    let direction = if text("dir") == "vi-en" { "vi-en" } else { "en-vi" }.to_string();
-    let translation = if direction == "vi-en" { text("en") } else { text("vi") };
+    // Server tra dir dang {src}-{dst}; "en" luon mang chu ngon ngu dich (L2). Nguon tieng Viet -> dich la L2.
+    let dir_resp = text("dir");
+    let direction = if dir_resp.is_empty() { dir.clone() } else { dir_resp };
+    let translation = if direction.starts_with("vi-") { text("en") } else { text("vi") };
     if translation.is_empty() {
         return Err("Chưa dịch được từ này.".into());
     }
@@ -573,6 +583,12 @@ fn read_vocab(body: &serde_json::Value) -> Vec<crate::history::HistoryVocab> {
 
 fn is_vietnamese(word: &str) -> bool {
     word.chars().any(|ch| "ăâêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵđĂÂÊÔƠƯÁÀẢÃẠẤẦẨẪẬẮẰẲẴẶÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴĐ".contains(ch))
+}
+
+/// Dau chi co o tieng Viet, khong co trong tieng Phap (loai é è ê à â î ô û ç dung chung).
+/// Dung khi ngon ngu dich la tieng Phap de phan biet voi cau tieng Viet.
+fn is_vietnamese_only(word: &str) -> bool {
+    word.chars().any(|ch| "ăđơưảãạấầẩẫậắằẳẵặẻẽẹểễệỉĩịỏõọổỗộớờởỡợủũụứừửữựỳỷỹỵĂĐƠƯẢÃẠẤẦẨẪẬẮẰẲẴẶẺẼẸỂỄỆỈĨỊỎÕỌỔỖỘỚỜỞỠỢỦŨỤỨỪỬỮỰỲỶỸỴ".contains(ch))
 }
 
 #[cfg(windows)]
