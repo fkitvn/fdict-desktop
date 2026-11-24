@@ -553,8 +553,7 @@ fn lookup_failure(status: u16, code: &str) -> String {
         (429, _) => "Tra nhanh quá. Thử lại sau ít phút.".into(),
         (503, "gemini_not_configured") | (503, "") => "Máy chủ chưa cấu hình tra từ.".into(),
         (_, "lookup_timeout") | (504, _) => "Máy dịch phản hồi quá lâu. Hãy thử lại.".into(),
-        (_, "lookup_busy") => "Máy dịch đang bận. Hãy thử lại sau ít giây.".into(),
-        _ => "Máy chủ chưa tra được từ này.".into(),
+        _ => "Hệ thống AI đang bị quá tải do nhiều người truy cập đồng thời. Hãy thử lại sau.".into(),
     }
 }
 
