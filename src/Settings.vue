@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { setTheme, themePreference } from "./theme.js";
@@ -26,6 +26,10 @@ const learnLangs = [
   { value: "en", label: "Tiếng Anh" },
   { value: "fr", label: "Tiếng Pháp" },
 ];
+const pendingLang = ref("");
+const langBusy = ref(false);
+const pendingLabel = computed(() => (pendingLang.value === "fr" ? "Tiếng Pháp" : "Tiếng Anh"));
+const currentLabel = computed(() => (learnLang.value === "fr" ? "Tiếng Pháp" : "Tiếng Anh"));
 const saveCollectionId = ref("");
 const colsLoading = ref(false);
 const colsError = ref("");
@@ -139,18 +143,35 @@ async function loadLearnLang() {
   }
 }
 
-async function chooseLearnLang(value) {
+function askLearnLang(value) {
   const lang = value === "fr" ? "fr" : "en";
-  if (lang === learnLang.value) return;
+  if (lang === learnLang.value || langBusy.value) return;
+  pendingLang.value = lang;
+}
+
+function cancelLearnLang() {
+  if (langBusy.value) return;
+  pendingLang.value = "";
+}
+
+async function confirmLearnLang() {
+  const lang = pendingLang.value === "fr" ? "fr" : "en";
+  if (!pendingLang.value || lang === learnLang.value || langBusy.value) {
+    pendingLang.value = "";
+    return;
+  }
   const previous = learnLang.value;
-  learnLang.value = lang;
+  langBusy.value = true;
   try {
     learnLang.value = await invoke("settings_set_target", { target: lang });
-    // Bộ sưu tập theo ngôn ngữ mới: tải lại danh sách lưu từ.
+    pendingLang.value = "";
     loadSaveCollection();
   } catch (error) {
     learnLang.value = previous;
     colsError.value = invokeError(error);
+    pendingLang.value = "";
+  } finally {
+    langBusy.value = false;
   }
 }
 
@@ -327,15 +348,16 @@ onBeforeUnmount(() => {
     <article v-if="signedIn" class="setting">
       <div>
         <h2>Ngôn ngữ học</h2>
-        <p>Chọn ngôn ngữ bạn muốn học. Đổi ngôn ngữ sẽ chuyển sang bộ từ của ngôn ngữ đó.</p>
+        <p>Bộ từ và máy học theo ngôn ngữ này.</p>
       </div>
-      <div class="choices">
+      <div class="choices tags">
         <button
           v-for="item in learnLangs"
           :key="item.value"
           type="button"
+          class="tag"
           :class="{ on: learnLang === item.value }"
-          @click="chooseLearnLang(item.value)"
+          @click="askLearnLang(item.value)"
         >
           {{ item.label }}
         </button>
@@ -415,6 +437,28 @@ onBeforeUnmount(() => {
       </button>
     </article>
   </section>
+
+  <div
+    v-if="pendingLang"
+    class="confirm"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="learn-lang-title"
+    @click.self="cancelLearnLang"
+  >
+    <div class="confirm-card">
+      <h2 id="learn-lang-title">Đổi sang {{ pendingLabel }}?</h2>
+      <p>
+        Bộ từ trên máy học chuyển sang {{ pendingLabel }}. Từ {{ currentLabel }} vẫn còn trên tài khoản.
+      </p>
+      <div class="confirm-actions">
+        <button type="button" :disabled="langBusy" @click="cancelLearnLang">Huỷ</button>
+        <button type="button" class="primary" :disabled="langBusy" @click="confirmLearnLang">
+          {{ langBusy ? "…" : "Đổi" }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style>
@@ -470,6 +514,11 @@ onBeforeUnmount(() => {
   background: var(--button);
   color: var(--button-text);
   border-color: var(--button);
+}
+
+.choices.tags button {
+  padding: 6px 12px;
+  font-size: 13px;
 }
 
 .choices select {
