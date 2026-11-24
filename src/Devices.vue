@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import DeviceModel from "./DeviceModel.vue";
+import { t, uiLang } from "./ui-text.js";
 
 const items = ref([]);
 const loading = ref(true);
@@ -10,14 +11,15 @@ const message = ref("");
 const shopUrl = ref("https://fkit.vn/fdict");
 
 function invokeError(error) {
-  return typeof error === "string" ? error : "Không kết nối được máy chủ.";
+  return typeof error === "string" ? error : t("error.server");
 }
 
 function seenLabel(value) {
-  if (!value) return "Chưa thấy";
+  if (!value) return t("devices.unseen");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Chưa thấy";
-  return date.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+  if (Number.isNaN(date.getTime())) return t("devices.unseen");
+  const locale = uiLang.value === "fr" ? "fr-FR" : uiLang.value === "en" ? "en-US" : "vi-VN";
+  return date.toLocaleString(locale, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 }
 
 async function load() {
@@ -38,7 +40,7 @@ async function openShop() {
   try {
     await openUrl(shopUrl.value);
   } catch {
-    message.value = "Không mở được trang thiết bị.";
+    message.value = t("devices.openFail");
   }
 }
 
@@ -47,14 +49,14 @@ onMounted(load);
 
 <template>
   <section class="devices">
-    <h1>Thiết bị đã kết nối</h1>
-    <p v-if="loading" class="state">Đang tải…</p>
-    <p v-else-if="!items.length && !message" class="state">Chưa kết nối thiết bị nào.</p>
+    <h1>{{ t("devices.title") }}</h1>
+    <p v-if="loading" class="state">{{ t("common.loading") }}</p>
+    <p v-else-if="!items.length && !message" class="state">{{ t("devices.empty") }}</p>
     <ul v-else-if="items.length">
       <li v-for="item in items" :key="item.id">
         <div>
           <p class="name">{{ item.name }}</p>
-          <p class="meta">{{ item.version || "Chưa rõ phiên bản" }} · {{ seenLabel(item.seen) }}</p>
+          <p class="meta">{{ item.version || t("devices.unknownVersion") }} · {{ seenLabel(item.seen) }}</p>
         </div>
         <span v-if="item.battery != null">{{ item.battery }}%</span>
       </li>
@@ -65,8 +67,8 @@ onMounted(load);
       <DeviceModel compact />
       <div class="pitch">
         <h2>FDict One</h2>
-        <p>Thiết bị học từ vựng cầm tay. Màn hình màu, bốn phím vật lý và sáu chế độ luyện tập, không thông báo làm xao nhãng.</p>
-        <button class="primary" type="button" @click="openShop">Mua thiết bị</button>
+        <p>{{ t("devices.pitch") }}</p>
+        <button class="primary" type="button" @click="openShop">{{ t("devices.buy") }}</button>
       </div>
     </article>
   </section>

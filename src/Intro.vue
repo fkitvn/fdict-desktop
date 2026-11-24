@@ -1,5 +1,6 @@
 <script setup>
 import DeviceModel from "./DeviceModel.vue";
+import { t } from "./ui-text.js";
 
 const emit = defineEmits(["login"]);
 defineProps({
@@ -10,9 +11,9 @@ defineProps({
 <template>
   <section class="intro">
     <DeviceModel />
-    <h1><em>Dịch nhanh</em> bằng <em>{{ hotkeyLabel }}</em></h1>
-    <p>Ôn tập lại trên <em>máy học từ vựng</em></p>
-    <button class="primary enter" type="button" @click="emit('login')">Bắt đầu khám phá</button>
+    <h1><em>{{ t("intro.quick") }}</em>{{ t("intro.with") }}<em>{{ hotkeyLabel }}</em></h1>
+    <p>{{ t("intro.review") }}<em>{{ t("intro.device") }}</em></p>
+    <button class="primary enter" type="button" @click="emit('login')">{{ t("intro.start") }}</button>
   </section>
 </template>
 

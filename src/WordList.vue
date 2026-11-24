@@ -3,20 +3,16 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import SpeakButton from "./SpeakButton.vue";
 import { markSentence } from "./marks.js";
+import { t } from "./ui-text.js";
 
 const PAGE_SIZE = 80;
 const STATUS_NEXT = { new: "learning", learning: "mastered", mastered: "new" };
-const STATUS_LABEL = {
-  new: "Mới",
-  learning: "Đang học",
-  mastered: "Đã thuộc",
-};
-const FILTERS = [
-  { key: "all", label: "Tất cả" },
-  { key: "new", label: "Mới" },
-  { key: "learning", label: "Đang học" },
-  { key: "mastered", label: "Đã thuộc" },
-];
+const FILTERS = computed(() => [
+  { key: "all", label: t("words.filterAll") },
+  { key: "new", label: t("words.statusNew") },
+  { key: "learning", label: t("words.statusLearning") },
+  { key: "mastered", label: t("words.statusMastered") },
+]);
 
 const collections = ref([]);
 const words = ref([]);
@@ -78,12 +74,45 @@ function sentenceMarks(sentence) {
 }
 
 function passLine(sentence) {
-  const bit = (on, name) => `${name} ${on ? "xong" : "chưa"}`;
-  return `${bit(sentence.passOrder, "Sắp xếp")} · ${bit(sentence.passCloze, "Điền")} · ${bit(sentence.passHear, "Nghe")}`;
+  const bit = (on, name) => `${name} ${on ? t("words.passDone") : t("words.passTodo")}`;
+  return `${bit(sentence.passOrder, t("words.passOrder"))} · ${bit(sentence.passCloze, t("words.passCloze"))} · ${bit(sentence.passHear, t("words.passHear"))}`;
 }
 
 function invokeError(error) {
-  return typeof error === "string" ? error : "Không kết nối được máy chủ.";
+  return typeof error === "string" ? error : t("error.server");
+}
+
+function unitWords(n) {
+  const v = Number(n) || 0;
+  return t(v === 1 ? "unit.wordOne" : "unit.wordMany", { n: v });
+}
+
+function unitSentences(n) {
+  const v = Number(n) || 0;
+  return t(v === 1 ? "unit.sentenceOne" : "unit.sentenceMany", { n: v });
+}
+
+function unitCols(n) {
+  const v = Number(n) || 0;
+  return t(v === 1 ? "unit.colOne" : "unit.colMany", { n: v });
+}
+
+function countLine(words, sentences) {
+  return `${unitWords(words)} · ${unitSentences(sentences)}`;
+}
+
+function statusLabel(status) {
+  if (status === "learning") return t("words.statusLearning");
+  if (status === "mastered") return t("words.statusMastered");
+  if (status === "new") return t("words.statusNew");
+  return status || "";
+}
+
+function dialogTitle(kind) {
+  if (kind === "create") return t("words.createTitle");
+  if (kind === "rename") return t("words.renameTitle");
+  if (kind === "move") return t("words.move");
+  return t("words.deleteTitle");
 }
 
 function ipaText(value) {
@@ -189,11 +218,11 @@ const moveTargets = computed(() => collections.value.filter((c) => c.id && c.id 
 function openMove(ids) {
   const list = (ids || []).filter(Boolean);
   if (!list.length) {
-    message.value = "Chưa chọn từ nào.";
+    message.value = t("words.noneSelected");
     return;
   }
   if (!moveTargets.value.length) {
-    message.value = "Hãy tạo bộ sưu tập khác trước.";
+    message.value = t("words.needOtherCol");
     return;
   }
   moveToId.value = moveTargets.value[0]?.id || "";
@@ -205,9 +234,9 @@ function wordLabel(ids) {
   if (!ids?.length) return "";
   if (ids.length === 1) {
     const w = words.value.find((item) => item.id === ids[0]) || (detail.value?.id === ids[0] ? detail.value : null);
-    return w?.en ? `"${w.en}"` : "1 từ";
+    return w?.en ? `"${w.en}"` : t("unit.wordOne", { n: 1 });
   }
-  return `${ids.length} từ`;
+  return t("unit.wordMany", { n: ids.length });
 }
 
 function closeDialog() {
@@ -219,7 +248,7 @@ async function submitDialog() {
   if (!dialog.value || busy.value) return;
   const name = nameInput.value.trim();
   if (dialog.value.kind !== "delete" && dialog.value.kind !== "move" && !name) {
-    message.value = "Hãy nhập tên bộ sưu tập.";
+    message.value = t("words.needName");
     return;
   }
   busy.value = true;
@@ -249,7 +278,7 @@ async function submitDialog() {
       const ids = dialog.value.ids || [];
       const target = collections.value.find((c) => c.id === moveToId.value);
       if (!target) {
-        message.value = "Hãy chọn bộ sưu tập.";
+        message.value = t("words.needCol");
         return;
       }
       await invoke("vocab_move", { ids, collectionId: target.id });
@@ -264,7 +293,7 @@ async function submitDialog() {
         return c;
       });
       dialog.value = null;
-      message.value = `Đã chuyển ${wordLabel(ids)} sang "${target.name}"`;
+      message.value = t("words.moved", { what: wordLabel(ids), name: target.name });
     } else {
       dialog.value = null;
     }
@@ -293,7 +322,7 @@ async function cycleStatus(item) {
 
 async function removeWord(item) {
   if (removing.value || saving.value) return;
-  if (!window.confirm(`Xóa từ "${item.en}" khỏi bộ sưu tập?`)) return;
+  if (!window.confirm(t("words.removeAsk", { word: item.en }))) return;
   removing.value = item.id;
   message.value = "";
   try {
@@ -329,7 +358,7 @@ async function saveEdit(item) {
   const en = draftEn.value.trim();
   const vi = draftVi.value.trim();
   if (!en || !vi) {
-    message.value = "Hãy nhập cả từ tiếng Anh và nghĩa tiếng Việt.";
+    message.value = t("words.needBoth");
     return;
   }
   if (en === item.en && vi === item.vi) {
@@ -384,27 +413,35 @@ onMounted(async () => {
     <template v-if="!current">
       <header class="head">
         <div class="title-block">
-          <h2>Bộ sưu tập</h2>
-          <p class="sub">{{ totalWords }} từ · {{ totalSentences }} câu · {{ collections.length }} bộ</p>
+          <h2>{{ t("words.title") }}</h2>
+          <p class="sub">{{ countLine(totalWords, totalSentences) }} · {{ unitCols(collections.length) }}</p>
           <p v-if="study" class="sub">
-            Từ đã thuộc {{ study.wordProgress?.mastered || study.mastered }}/{{ study.words }} · Luyện tập
-            {{ study.wordProgress?.quiz || 0 }} · Phân loại từ {{ study.wordProgress?.pos || 0 }} · Chính tả
-            {{ study.wordProgress?.spell || 0 }} · Câu đã thuộc
-            {{ study.sentenceProgress?.mastered || 0 }}/{{ study.sentenceProgress?.total || 0 }} · Sắp xếp
-            {{ study.sentenceProgress?.order || 0 }} · Điền {{ study.sentenceProgress?.cloze || 0 }} · Nghe
-            {{ study.sentenceProgress?.hear || 0 }}
+            {{
+              t("words.study", {
+                mastered: study.wordProgress?.mastered || study.mastered,
+                words: study.words,
+                quiz: study.wordProgress?.quiz || 0,
+                pos: study.wordProgress?.pos || 0,
+                spell: study.wordProgress?.spell || 0,
+                sentences: study.sentenceProgress?.mastered || 0,
+                sentenceTotal: study.sentenceProgress?.total || 0,
+                order: study.sentenceProgress?.order || 0,
+                cloze: study.sentenceProgress?.cloze || 0,
+                hear: study.sentenceProgress?.hear || 0,
+              })
+            }}
           </p>
         </div>
-        <button type="button" class="primary create-btn" @click="openDialog('create')">Tạo bộ</button>
+        <button type="button" class="primary create-btn" @click="openDialog('create')">{{ t("words.create") }}</button>
       </header>
 
       <div class="toolbar">
-        <input v-model="query" type="search" placeholder="Tìm bộ sưu tập..." />
+        <input v-model="query" type="search" :placeholder="t('words.searchCols')" />
       </div>
 
-      <p v-if="loading" class="state">Đang tải.</p>
+      <p v-if="loading" class="state">{{ t("words.loading") }}</p>
       <p v-else-if="!shownCollections.length && !message" class="state">
-        Chưa có bộ sưu tập. Tạo bộ mới hoặc lưu từ khi tra cứu.
+        {{ t("words.empty") }}
       </p>
       <ul v-else class="collections">
         <li
@@ -417,21 +454,21 @@ onMounted(async () => {
             <span class="meta">
               <strong>{{ col.name }}</strong>
               <small>
-                {{ col.wordCount || 0 }} từ · {{ col.sentenceCount || 0 }} câu
-                <template v-if="col.isDefault"> · Mặc định</template>
-                <template v-if="col.id === lastCollectionId"> · Lưu nhanh</template>
+                {{ countLine(col.wordCount || 0, col.sentenceCount || 0) }}
+                <template v-if="col.isDefault"> · {{ t("words.default") }}</template>
+                <template v-if="col.id === lastCollectionId"> · {{ t("words.quickSave") }}</template>
               </small>
             </span>
             <span class="chev" aria-hidden="true">›</span>
           </button>
           <div class="row-actions">
-            <button type="button" class="text" @click.stop="openDialog('rename', col)">Đổi tên</button>
+            <button type="button" class="text" @click.stop="openDialog('rename', col)">{{ t("words.rename") }}</button>
             <button
               type="button"
               class="text danger"
               @click.stop="openDialog('delete', col)"
             >
-              Xóa
+              {{ t("words.delete") }}
             </button>
           </div>
         </li>
@@ -441,26 +478,26 @@ onMounted(async () => {
     <template v-else>
       <header class="head detail-head">
         <div class="title-block">
-          <button type="button" class="text back" @click="backToList">← Bộ sưu tập</button>
+          <button type="button" class="text back" @click="backToList">{{ t("words.back") }}</button>
           <div class="title-line">
             <h2>{{ current.name }}</h2>
             <div class="choices">
-              <button type="button" class="text" @click="openDialog('rename', current)">Đổi tên</button>
+              <button type="button" class="text" @click="openDialog('rename', current)">{{ t("words.rename") }}</button>
               <button
                 type="button"
                 class="text danger"
                 @click="openDialog('delete', current)"
               >
-                Xóa bộ
+                {{ t("words.deleteSet") }}
               </button>
             </div>
           </div>
-          <p class="sub">{{ current.wordCount || filteredWords.length }} từ · {{ current.sentenceCount || 0 }} câu</p>
+          <p class="sub">{{ countLine(current.wordCount || filteredWords.length, current.sentenceCount || 0) }}</p>
         </div>
       </header>
 
       <div class="toolbar">
-        <input v-model="query" type="search" placeholder="Tìm từ hoặc nghĩa..." />
+        <input v-model="query" type="search" :placeholder="t('words.searchWords')" />
         <div class="filters">
           <button
             v-for="f in FILTERS"
@@ -479,13 +516,13 @@ onMounted(async () => {
           :disabled="busy"
           @click="openMove(selected)"
         >
-          Chuyển bộ ({{ selected.length }})
+          {{ t("words.move") }} ({{ selected.length }})
         </button>
       </div>
 
-      <p v-if="wordsLoading" class="state">Đang tải từ.</p>
+      <p v-if="wordsLoading" class="state">{{ t("words.loadingWords") }}</p>
       <p v-else-if="!pagedWords.length && !message" class="state">
-        {{ query || filter !== 'all' ? 'Không tìm thấy từ phù hợp.' : 'Chưa có từ nào trong bộ này.' }}
+        {{ query || filter !== 'all' ? t('words.noMatch') : t('words.emptyCol') }}
       </p>
       <div v-else class="split">
         <ul class="word-list">
@@ -505,12 +542,12 @@ onMounted(async () => {
               @keydown.esc.prevent="cancelEdit"
             >
               <div class="fields">
-                <input v-model="draftEn" type="text" maxlength="500" placeholder="Từ cần học" :disabled="saving" />
-                <input v-model="draftVi" type="text" maxlength="500" placeholder="Tiếng Việt" :disabled="saving" />
+                <input v-model="draftEn" type="text" maxlength="500" :placeholder="t('words.wordPh')" :disabled="saving" />
+                <input v-model="draftVi" type="text" maxlength="500" :placeholder="t('words.viPh')" :disabled="saving" />
               </div>
               <div class="actions">
-                <button type="submit" :disabled="saving">{{ saving ? "…" : "Lưu" }}</button>
-                <button class="text" type="button" :disabled="saving" @click="cancelEdit">Hủy</button>
+                <button type="submit" :disabled="saving">{{ saving ? "…" : t("words.save") }}</button>
+                <button class="text" type="button" :disabled="saving" @click="cancelEdit">{{ t("common.cancel") }}</button>
               </div>
             </form>
             <div
@@ -534,7 +571,7 @@ onMounted(async () => {
                 <p class="vi">{{ item.vi }}</p>
               </div>
               <span class="tag" :class="statusClass(item.status)" @click.stop="cycleStatus(item)">
-                {{ STATUS_LABEL[item.status] || item.status }}
+                {{ statusLabel(item.status) }}
               </span>
             </div>
           </li>
@@ -562,26 +599,26 @@ onMounted(async () => {
             </li>
           </ul>
           <p class="status-line">
-            Trạng thái:
+            {{ t("words.status") }}
             <button type="button" class="tag" :class="statusClass(detail.status)" @click="cycleStatus(detail)">
-              {{ STATUS_LABEL[detail.status] || detail.status }}
+              {{ statusLabel(detail.status) }}
             </button>
           </p>
           <div class="actions">
-            <button type="button" @click="startEdit(detail)">Sửa</button>
-            <button type="button" :disabled="busy" @click="openMove([detail.id])">Chuyển bộ</button>
+            <button type="button" @click="startEdit(detail)">{{ t("words.edit") }}</button>
+            <button type="button" :disabled="busy" @click="openMove([detail.id])">{{ t("words.move") }}</button>
             <button class="remove" type="button" :disabled="removing === detail.id" @click="removeWord(detail)">
-              {{ removing === detail.id ? "…" : "Xóa" }}
+              {{ removing === detail.id ? "…" : t("words.delete") }}
             </button>
-            <button class="text" type="button" @click="detail = null">Đóng</button>
+            <button class="text" type="button" @click="detail = null">{{ t("words.close") }}</button>
           </div>
         </aside>
       </div>
 
       <div v-if="pageCount > 1" class="pager">
-        <button type="button" :disabled="page <= 1" @click="page -= 1">Trước</button>
-        <span>Trang {{ page }} / {{ pageCount }} · {{ filteredWords.length }} từ</span>
-        <button type="button" :disabled="page >= pageCount" @click="page += 1">Sau</button>
+        <button type="button" :disabled="page <= 1" @click="page -= 1">{{ t("words.prev") }}</button>
+        <span>{{ t("words.page", { page, count: pageCount }) }} · {{ unitWords(filteredWords.length) }}</span>
+        <button type="button" :disabled="page >= pageCount" @click="page += 1">{{ t("words.next") }}</button>
       </div>
     </template>
 
@@ -589,29 +626,20 @@ onMounted(async () => {
 
     <div v-if="dialog" class="modal" @click.self="closeDialog">
       <div class="modal-card" role="dialog" aria-modal="true">
-        <h3>
-          {{
-            dialog.kind === "create"
-              ? "Tạo bộ sưu tập"
-              : dialog.kind === "rename"
-                ? "Đổi tên bộ sưu tập"
-                : dialog.kind === "move"
-                  ? "Chuyển bộ"
-                  : "Xóa bộ sưu tập"
-          }}
-        </h3>
+        <h3>{{ dialogTitle(dialog.kind) }}</h3>
         <p v-if="dialog.kind === 'delete'" class="sub danger-copy">
-          Xóa bộ “{{ dialog.col?.name }}” ({{ dialog.col?.wordCount || 0 }} từ)? Toàn bộ từ trong bộ sẽ bị xóa. Hành động này không hoàn tác.
+          {{ t("words.deleteAsk", { name: dialog.col?.name || "", count: unitWords(dialog.col?.wordCount || 0) }) }}
+          {{ t("words.deleteWarn") }}
         </p>
         <p v-else-if="dialog.kind === 'move'" class="sub">
-          Chọn bộ để chuyển {{ wordLabel(dialog.ids) }} sang.
+          {{ t("words.moveHint", { what: wordLabel(dialog.ids) }) }}
         </p>
         <input
           v-if="dialog.kind !== 'delete' && dialog.kind !== 'move'"
           v-model="nameInput"
           type="text"
           maxlength="60"
-          placeholder="Tên bộ sưu tập"
+          :placeholder="t('settings.colNamePh')"
           :disabled="busy"
           @keydown.enter.prevent="submitDialog"
         />
@@ -623,7 +651,7 @@ onMounted(async () => {
           <option v-for="col in moveTargets" :key="col.id" :value="col.id">{{ col.name }}</option>
         </select>
         <div class="actions">
-          <button type="button" class="text" :disabled="busy" @click="closeDialog">Hủy</button>
+          <button type="button" class="text" :disabled="busy" @click="closeDialog">{{ t("common.cancel") }}</button>
           <button
             type="button"
             :class="{ remove: dialog.kind === 'delete', primary: dialog.kind !== 'delete' }"
@@ -634,7 +662,7 @@ onMounted(async () => {
             "
             @click="submitDialog"
           >
-            {{ busy ? "…" : dialog.kind === "delete" ? "Xóa" : dialog.kind === "move" ? "Chuyển" : "Lưu" }}
+            {{ busy ? "…" : dialog.kind === "delete" ? t("words.delete") : dialog.kind === "move" ? t("words.moveDo") : t("words.save") }}
           </button>
         </div>
       </div>

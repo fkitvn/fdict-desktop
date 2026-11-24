@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import SpeakButton from "./SpeakButton.vue";
 import { speak } from "./speak.js";
 import { markSentence } from "./marks.js";
+import { t } from "./ui-text.js";
 
 defineProps({
   hotkeyLabel: { type: String, default: "Alt + Q" },
@@ -80,7 +81,7 @@ async function lookupWord(text) {
     await invoke("lookup_text", { word, quiet: true });
   } catch (error) {
     pending.value = "";
-    notice.value = typeof error === "string" && error.trim() ? error : "Không tra được từ này.";
+    notice.value = typeof error === "string" && error.trim() ? error : t("home.lookupFail");
   }
 }
 
@@ -107,7 +108,7 @@ function onLookup(payload) {
   }
   if (payload.status === "error" && pending.value === payload.word) {
     pending.value = "";
-    notice.value = payload.message || "Không tra được từ này.";
+    notice.value = payload.message || t("home.lookupFail");
   }
 }
 
@@ -189,7 +190,7 @@ async function submit() {
     notice.value =
       typeof error === "string" && error.trim()
         ? error
-        : "Không tra được từ này.";
+        : t("home.lookupFail");
   }
 }
 
@@ -244,7 +245,7 @@ onBeforeUnmount(() => {
 <template>
   <section class="home">
     <header class="hero">
-      <h1>Dịch theo <em>ngữ cảnh</em> bằng <em>AI</em></h1>
+      <h1>{{ t("home.heroA") }}<em>{{ t("home.heroEm1") }}</em>{{ t("home.heroB") }}<em>{{ t("home.heroEm2") }}</em></h1>
     </header>
     <form class="search" @submit.prevent="submit">
       <input
@@ -252,11 +253,11 @@ onBeforeUnmount(() => {
         v-model="draft"
         type="text"
         spellcheck="false"
-        placeholder="Nhập từ hoặc câu ngắn"
-        aria-label="Từ cần tra"
+        :placeholder="t('home.placeholder')"
+        :aria-label="t('home.lookupAria')"
         @keydown.enter.prevent="submit"
       />
-      <button type="submit" :disabled="!draft.trim()">Tra cứu</button>
+      <button type="submit" :disabled="!draft.trim()">{{ t("home.lookup") }}</button>
     </form>
     <div class="toggles">
       <button
@@ -264,10 +265,10 @@ onBeforeUnmount(() => {
         class="save-toggle"
         :class="{ on: stickContext }"
         :aria-pressed="stickContext"
-        :aria-label="stickContext ? 'Tắt bám sát ngữ cảnh' : 'Bật bám sát ngữ cảnh'"
+        :aria-label="stickContext ? t('home.stickContextOff') : t('home.stickContextOn')"
         @click="toggleStick('context')"
       >
-        <span>Bám ngữ cảnh</span>
+        <span>{{ t("home.stickContext") }}</span>
         <span class="save-switch"><span class="knob"></span></span>
       </button>
       <button
@@ -275,10 +276,10 @@ onBeforeUnmount(() => {
         class="save-toggle"
         :class="{ on: stickTopics }"
         :aria-pressed="stickTopics"
-        :aria-label="stickTopics ? 'Tắt bám sát chủ đề' : 'Bật bám sát chủ đề'"
+        :aria-label="stickTopics ? t('home.stickTopicsOff') : t('home.stickTopicsOn')"
         @click="toggleStick('topics')"
       >
-        <span>Bám chủ đề</span>
+        <span>{{ t("home.stickTopics") }}</span>
         <span class="save-switch"><span class="knob"></span></span>
       </button>
       <button
@@ -286,10 +287,10 @@ onBeforeUnmount(() => {
         class="save-toggle"
         :class="{ on: autoSpeak }"
         :aria-pressed="autoSpeak"
-        :aria-label="autoSpeak ? 'Tắt tự động phát âm' : 'Bật tự động phát âm'"
+        :aria-label="autoSpeak ? t('home.speakOff') : t('home.speakOn')"
         @click="toggleSpeak"
       >
-        <span>Phát âm</span>
+        <span>{{ t("home.speak") }}</span>
         <span class="save-switch"><span class="knob"></span></span>
       </button>
       <div class="save-group">
@@ -298,17 +299,17 @@ onBeforeUnmount(() => {
           class="save-toggle"
           :class="{ on: autoAdd }"
           :aria-pressed="autoAdd"
-          :aria-label="autoAdd ? 'Tắt tự lưu từ' : 'Bật tự lưu từ'"
+          :aria-label="autoAdd ? t('home.autoSaveOff') : t('home.autoSaveOn')"
           @click="toggleSave"
         >
-          <span>Tự lưu</span>
+          <span>{{ t("home.autoSave") }}</span>
           <span class="save-switch"><span class="knob"></span></span>
         </button>
         <select
           v-if="autoAdd && collections.length"
           class="pick"
           :value="saveCollectionId"
-          aria-label="Bộ sưu tập lưu từ"
+          :aria-label="t('settings.saveCol')"
           @change="chooseCollection"
         >
           <option v-for="col in collections" :key="col.id" :value="col.id">{{ col.name }}</option>
@@ -316,15 +317,15 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <p v-if="notice" class="notice">{{ notice }}</p>
-    <p v-if="loading" class="state">Đang tải…</p>
+    <p v-if="loading" class="state">{{ t("home.loading") }}</p>
     <p v-else-if="!pending && !items.length" class="state">
-      Chưa có từ nào. Nhập từ ở trên, hoặc chọn chữ rồi nhấn {{ hotkeyLabel }}.
+      {{ t("home.empty", { hotkey: hotkeyLabel }) }}
     </p>
     <ul v-else>
       <li v-if="pending" class="row">
         <div class="stack">
           <p class="term">{{ pending }}</p>
-          <p class="mean wait"><span class="arrow" aria-hidden="true">→</span>Đang dịch…</p>
+          <p class="mean wait"><span class="arrow" aria-hidden="true">→</span>{{ t("home.translating") }}</p>
         </div>
       </li>
       <li v-for="item in items" :key="item.word">
@@ -352,7 +353,7 @@ onBeforeUnmount(() => {
               <i v-if="fromVi(item.direction) && englishMeta(item)">{{ englishMeta(item) }}</i>
             </p>
             <p v-if="item.kind === 'sentence' && item.vocab?.length" class="roots">
-              <span>Từ vựng</span>
+              <span>{{ t("home.vocab") }}</span>
               <span v-for="hit in item.vocab" :key="hit.en">{{ hit.en }}<template v-if="hit.pos"> · {{ hit.pos }}</template><template v-if="hit.vi"> · {{ hit.vi }}</template></span>
             </p>
           </div>
@@ -363,7 +364,7 @@ onBeforeUnmount(() => {
         </p>
       </li>
     </ul>
-    <p class="hint">Chọn văn bản, rồi nhấn <kbd>{{ hotkeyLabel }}</kbd> để dịch.</p>
+    <p class="hint">{{ t("home.hintBefore") }}<kbd>{{ hotkeyLabel }}</kbd>{{ t("home.hintAfter") }}</p>
   </section>
 </template>
 

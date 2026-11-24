@@ -6,6 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import SpeakButton from "./SpeakButton.vue";
 import { speak, stopSpeak } from "./speak.js";
 import { markSentence } from "./marks.js";
+import { t } from "./ui-text.js";
 
 const items = ref([]);
 const notice = ref("");
@@ -14,7 +15,7 @@ const field = ref(null);
 const hint = computed(() => {
   const word = draft.value.trim();
   if (!word) return "";
-  return isVietnamese(word) ? "Việt → Anh" : "Anh → Việt";
+  return isVietnamese(word) ? t("dir.viEn") : t("dir.enVi");
 });
 const autoAdd = ref(true);
 const autoSpeak = ref(localStorage.getItem("fdict-auto-speak") === "1");
@@ -36,10 +37,10 @@ function ipaText(value) {
 }
 
 function directionLabel(direction) {
-  if (direction === "vi-en") return "Việt → Anh";
-  if (direction === "en-vi") return "Anh → Việt";
-  if (direction === "vi-fr") return "Việt → Pháp";
-  if (direction === "fr-vi") return "Pháp → Việt";
+  if (direction === "vi-en") return t("dir.viEn");
+  if (direction === "en-vi") return t("dir.enVi");
+  if (direction === "vi-fr") return t("dir.viFr");
+  if (direction === "fr-vi") return t("dir.frVi");
   return "";
 }
 
@@ -100,7 +101,7 @@ async function submit() {
     notice.value =
       typeof error === "string" && error.trim()
         ? error
-        : "Không tra được từ này.";
+        : t("home.lookupFail");
   }
 }
 
@@ -133,7 +134,7 @@ async function lookupWord(text) {
   try {
     await invoke("lookup_text", { word });
   } catch (error) {
-    notice.value = typeof error === "string" && error.trim() ? error : "Không tra được từ này.";
+    notice.value = typeof error === "string" && error.trim() ? error : t("home.lookupFail");
   }
 }
 
@@ -152,15 +153,15 @@ async function remove(item) {
       id = words.find((word) => word.en.replace(/\s+/g, " ").trim().toLowerCase() === en)?.id || "";
     }
     if (!id) {
-      patch(item.word, { saveStatus: "error", saveMessage: "Từ này không có trong danh sách." });
+      patch(item.word, { saveStatus: "error", saveMessage: t("popup.notInList") });
       return;
     }
     await invoke("vocab_remove", { id });
-    patch(item.word, { wordId: "", saveStatus: "removed", saveMessage: "Đã bỏ khỏi danh sách." });
+    patch(item.word, { wordId: "", saveStatus: "removed", saveMessage: t("popup.removed") });
   } catch (error) {
     patch(item.word, {
       saveStatus: "error",
-      saveMessage: typeof error === "string" && error.trim() ? error : "Chưa bỏ được từ này.",
+      saveMessage: typeof error === "string" && error.trim() ? error : t("popup.removeFail"),
     });
   } finally {
     removing.value = "";
@@ -238,8 +239,8 @@ onBeforeUnmount(() => {
           v-model="draft"
           type="text"
           spellcheck="false"
-          placeholder="Nhập từ hoặc câu ngắn"
-          aria-label="Từ cần tra"
+          :placeholder="t('home.placeholder')"
+          :aria-label="t('home.lookupAria')"
           data-tauri-drag-region="false"
           @keydown.enter.prevent="submit"
         />
@@ -250,8 +251,8 @@ onBeforeUnmount(() => {
         type="button"
         class="close"
         data-tauri-drag-region="false"
-        aria-label="Đóng"
-        title="Đóng"
+        :aria-label="t('words.close')"
+        :title="t('words.close')"
         @click.stop="closePopup"
       >
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -262,7 +263,7 @@ onBeforeUnmount(() => {
     <p v-if="notice" class="notice">{{ notice }}</p>
 
     <p v-if="!items.length" class="empty">
-      Chọn chữ rồi nhấn {{ hotkeyLabel }}, hoặc nhập từ ở trên.
+      {{ t("popup.empty", { hotkey: hotkeyLabel }) }}
     </p>
     <ul v-else>
       <li v-for="item in items" :key="item.word">
@@ -273,10 +274,10 @@ onBeforeUnmount(() => {
             type="button"
             class="drop"
             :disabled="removing === item.word"
-            :aria-label="'Xoá từ ' + item.word"
+            :aria-label="t('popup.deleteWord', { word: item.word })"
             @click="remove(item)"
           >
-            {{ removing === item.word ? "…" : "Xoá" }}
+            {{ removing === item.word ? "…" : t("popup.delete") }}
           </button>
         </div>
         <p class="word">
@@ -308,11 +309,11 @@ onBeforeUnmount(() => {
           <SpeakButton v-if="fromVi(item.direction)" :text="item.translation" />
         </p>
         <p v-if="item.status === 'ready' && item.kind === 'sentence' && item.vocab?.length" class="roots">
-          <span>Từ vựng</span>
+          <span>{{ t("home.vocab") }}</span>
           <span v-for="hit in item.vocab" :key="hit.en">{{ hit.en }}<template v-if="hit.vi"> · {{ hit.vi }}</template></span>
         </p>
         <p v-else class="mean wait">
-          {{ item.status === "loading" ? "Đang dịch…" : item.message }}
+          {{ item.status === "loading" ? t("home.translating") : item.message }}
         </p>
         <p
           v-if="
@@ -349,7 +350,7 @@ onBeforeUnmount(() => {
         type="button"
         class="logo"
         data-tauri-drag-region="false"
-        aria-label="Mở FDict"
+        :aria-label="t('popup.openApp')"
         @click.stop="openApp"
       >
         <img src="/logo-full.svg" alt="" />
@@ -361,10 +362,10 @@ onBeforeUnmount(() => {
           :class="{ on: autoSpeak }"
           data-tauri-drag-region="false"
           :aria-pressed="autoSpeak"
-          :aria-label="autoSpeak ? 'Tắt tự động phát âm' : 'Bật tự động phát âm'"
+          :aria-label="autoSpeak ? t('home.speakOff') : t('home.speakOn')"
           @click.stop="toggleSpeak"
         >
-          <span>Phát âm</span>
+          <span>{{ t("home.speak") }}</span>
           <span class="save-switch"><span class="knob"></span></span>
         </button>
         <button
@@ -373,10 +374,10 @@ onBeforeUnmount(() => {
           :class="{ on: autoAdd }"
           data-tauri-drag-region="false"
           :aria-pressed="autoAdd"
-          :aria-label="autoAdd ? 'Tắt tự lưu từ' : 'Bật tự lưu từ'"
+          :aria-label="autoAdd ? t('home.autoSaveOff') : t('home.autoSaveOn')"
           @click.stop="toggleSave"
         >
-          <span>Tự lưu</span>
+          <span>{{ t("home.autoSave") }}</span>
           <span class="save-switch"><span class="knob"></span></span>
         </button>
       </div>
