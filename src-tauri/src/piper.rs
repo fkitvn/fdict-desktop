@@ -7,9 +7,21 @@ use zip::ZipArchive;
 
 const RUNTIME_URL: &str = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip";
 // LJ Speech, một giọng, public domain. https://keithito.com/LJ-Speech-Dataset/
-const VOICE_URL: &str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx";
-const VOICE_CONFIG_URL: &str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json";
-const VOICE_FILE: &str = "en_US-ljspeech-medium.onnx";
+const EN_VOICE_URL: &str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx";
+const EN_VOICE_CONFIG_URL: &str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json";
+const EN_VOICE_FILE: &str = "en_US-ljspeech-medium.onnx";
+// Siwis, giọng Pháp (fr_FR). https://github.com/rhasspy/piper-voices
+const FR_VOICE_URL: &str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx";
+const FR_VOICE_CONFIG_URL: &str = "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json";
+const FR_VOICE_FILE: &str = "fr_FR-siwis-medium.onnx";
+
+fn voice_urls(target: &str) -> (&'static str, &'static str, &'static str) {
+    if target == "fr" {
+        (FR_VOICE_URL, FR_VOICE_CONFIG_URL, FR_VOICE_FILE)
+    } else {
+        (EN_VOICE_URL, EN_VOICE_CONFIG_URL, EN_VOICE_FILE)
+    }
+}
 
 static BUSY: AtomicBool = AtomicBool::new(false);
 
@@ -34,7 +46,9 @@ pub async fn piper_speak(app: AppHandle, text: String) -> Result<(), String> {
     stop_playback();
     let dir = piper_dir(&app)?;
     let exe = ensure_runtime(&dir).await?;
-    let model = ensure_voice(&dir).await?;
+    // Chon giong theo ngon ngu hoc cua tai khoan (en|fr).
+    let target = crate::vocab::cached_target();
+    let model = ensure_voice(&dir, &target).await?;
     let wav = speak_file(&dir);
     if wav.exists() {
         let _ = std::fs::remove_file(&wav);
@@ -85,20 +99,21 @@ async fn ensure_runtime(dir: &Path) -> Result<PathBuf, String> {
     find_exe(&runtime).ok_or_else(|| "Không tìm thấy bộ đọc Piper.".to_string())
 }
 
-async fn ensure_voice(dir: &Path) -> Result<PathBuf, String> {
+async fn ensure_voice(dir: &Path, target: &str) -> Result<PathBuf, String> {
     let voices = dir.join("voices");
     std::fs::create_dir_all(&voices).map_err(|err| err.to_string())?;
     for name in ["en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json"] {
         let _ = std::fs::remove_file(voices.join(name));
     }
-    let model = voices.join(VOICE_FILE);
-    let config = voices.join(format!("{VOICE_FILE}.json"));
+    let (url, config_url, file) = voice_urls(target);
+    let model = voices.join(file);
+    let config = voices.join(format!("{file}.json"));
     if !model.is_file() {
-        let bytes = download(VOICE_URL).await?;
+        let bytes = download(url).await?;
         write_file(&model, &bytes)?;
     }
     if !config.is_file() {
-        let bytes = download(VOICE_CONFIG_URL).await?;
+        let bytes = download(config_url).await?;
         write_file(&config, &bytes)?;
     }
     Ok(model)

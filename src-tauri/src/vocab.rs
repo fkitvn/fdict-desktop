@@ -1,7 +1,83 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
+
+/// Ngon ngu hoc cua tai khoan (en | fr), lay tu /api/app/settings. Cache trong bo nho.
+static TARGET: Mutex<Option<String>> = Mutex::new(None);
+
+fn norm_target(t: &str) -> String {
+    if t == "fr" { "fr".into() } else { "en".into() }
+}
+
+/// Ngon ngu hoc da cache (mac dinh 'en' neu chua tai).
+pub(crate) fn cached_target() -> String {
+    TARGET.lock().ok().and_then(|g| g.clone()).unwrap_or_else(|| "en".into())
+}
+
+fn set_cached_target(t: &str) {
+    if let Ok(mut g) = TARGET.lock() {
+        *g = Some(norm_target(t));
+    }
+}
+
+async fn fetch_target(app: &AppHandle, token: &str) -> String {
+    match crate::auth::get_json(
+        &format!("{}/api/app/settings", crate::env::dict_origin(app)),
+        Some(token),
+    )
+    .await
+    {
+        Ok((status, body)) if status.is_success() => {
+            let t = body
+                .pointer("/settings/target_lang")
+                .and_then(|v| v.as_str())
+                .unwrap_or("en");
+            set_cached_target(t);
+            norm_target(t)
+        }
+        _ => cached_target(),
+    }
+}
+
+/// Tra ngon ngu hoc: dung cache neu co, chua co thi tai tu server.
+pub(crate) async fn ensure_target(app: &AppHandle, token: &str) -> String {
+    if let Ok(g) = TARGET.lock() {
+        if let Some(t) = g.clone() {
+            return t;
+        }
+    }
+    fetch_target(app, token).await
+}
+
+/// Lay ngon ngu hoc hien tai (cho Cai dat).
+#[tauri::command]
+pub async fn settings_target(app: AppHandle) -> Result<String, String> {
+    let token = crate::auth::bearer_token(&app).ok_or("Hãy đăng nhập.")?;
+    Ok(fetch_target(&app, &token).await)
+}
+
+/// Doi ngon ngu hoc. May se dong bo lai bo tu theo ngon ngu moi.
+#[tauri::command]
+pub async fn settings_set_target(app: AppHandle, target: String) -> Result<String, String> {
+    let t = norm_target(target.trim());
+    let token = crate::auth::bearer_token(&app).ok_or("Hãy đăng nhập để đổi ngôn ngữ học.")?;
+    let (status, body) = crate::auth::post_json(
+        &format!("{}/api/app/settings", crate::env::dict_origin(&app)),
+        json!({ "target_lang": t }),
+        Some(&token),
+    )
+    .await?;
+    if status.as_u16() == 401 {
+        return Err("Hãy đăng nhập lại để đổi ngôn ngữ học.".into());
+    }
+    if !status.is_success() {
+        return Err(api_error(&body, "Chưa đổi được ngôn ngữ học."));
+    }
+    set_cached_target(&t);
+    Ok(t)
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -579,7 +655,7 @@ pub async fn save_pair(
     let Some(token) = lookup_token.map(str::to_owned).filter(|token| crate::auth::bearer_token(app).as_ref() == Some(token)) else {
         return ("error".into(), "Hãy đăng nhập để lưu từ.".into(), String::new());
     };
-    let (en, vi) = if direction == "vi-en" {
+    let (en, vi) = if direction.starts_with("vi-") {
         (translation.to_string(), word.to_string())
     } else {
         (word.to_string(), translation.to_string())

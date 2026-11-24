@@ -56,6 +56,8 @@ pub fn run() {
             vocab::vocab_set_status,
             vocab::vocab_remove,
             vocab::vocab_move,
+            vocab::settings_target,
+            vocab::settings_set_target,
             env::env_snapshot,
             update::update_check,
             update::update_install,

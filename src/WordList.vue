@@ -505,7 +505,7 @@ onMounted(async () => {
               @keydown.esc.prevent="cancelEdit"
             >
               <div class="fields">
-                <input v-model="draftEn" type="text" maxlength="500" placeholder="Tiếng Anh" :disabled="saving" />
+                <input v-model="draftEn" type="text" maxlength="500" placeholder="Từ cần học" :disabled="saving" />
                 <input v-model="draftVi" type="text" maxlength="500" placeholder="Tiếng Việt" :disabled="saving" />
               </div>
               <div class="actions">

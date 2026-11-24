@@ -38,7 +38,13 @@ function ipaText(value) {
 function directionLabel(direction) {
   if (direction === "vi-en") return "Việt → Anh";
   if (direction === "en-vi") return "Anh → Việt";
+  if (direction === "vi-fr") return "Việt → Pháp";
+  if (direction === "fr-vi") return "Pháp → Việt";
   return "";
+}
+
+function fromVi(direction) {
+  return String(direction || "").startsWith("vi-");
 }
 
 function apply(payload) {
@@ -79,7 +85,7 @@ function apply(payload) {
     next.status === "ready" &&
     previous?.status !== "ready"
   ) {
-    const text = next.direction === "vi-en" ? next.translation : next.word;
+    const text = fromVi(next.direction) ? next.translation : next.word;
     if (text) speak(text);
   }
 }
@@ -109,19 +115,20 @@ function extraSentences(item) {
 }
 
 function englishOf(item) {
-  return item.direction === "vi-en" ? item.translation : item.word;
+  return fromVi(item.direction) ? item.translation : item.word;
 }
 
 function sentenceMarks(item) {
   if (item?.kind !== "sentence" || item.status !== "ready") return null;
-  const text = item.direction === "vi-en" ? item.translation : item.word;
+  const text = String(item.direction || "").startsWith("vi-") ? item.translation : item.word;
   const words = (item.vocab || []).map((hit) => hit.en).filter(Boolean);
   if (!text || !words.length) return null;
   return markSentence(text, words);
 }
 
 async function lookupWord(text) {
-  const word = String(text || "").replace(/[^A-Za-z'-]/g, "").trim();
+  // Giu ca chu Latin co dau (tieng Phap).
+  const word = String(text || "").replace(/[^A-Za-zÀ-ÿŒœ'-]/g, "").trim();
   if (!word) return;
   try {
     await invoke("lookup_text", { word });
@@ -273,17 +280,17 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <p class="word">
-          <span v-if="sentenceMarks(item) && item.direction !== 'vi-en'" class="marked">
+          <span v-if="sentenceMarks(item) && !fromVi(item.direction)" class="marked">
             <template v-for="(part, index) in sentenceMarks(item)" :key="index">
               <button v-if="part.on" type="button" class="hit" @click="lookupWord(part.text)">{{ part.text }}</button>
               <span v-else>{{ part.text }}</span>
             </template>
           </span>
           <span v-else>{{ item.word }}</span>
-          <SpeakButton v-if="item.status === 'ready' && item.direction !== 'vi-en'" :text="item.word" />
+          <SpeakButton v-if="item.status === 'ready' && !fromVi(item.direction)" :text="item.word" />
         </p>
         <p
-          v-if="item.direction !== 'vi-en' && (item.pos || item.ipa)"
+          v-if="!fromVi(item.direction) && (item.pos || item.ipa)"
           class="lex"
         >
           <span v-if="item.pos">{{ item.pos }}</span
@@ -291,14 +298,14 @@ onBeforeUnmount(() => {
           ><i v-if="item.ipa">{{ ipaText(item.ipa) }}</i>
         </p>
         <p v-if="item.status === 'ready'" class="mean">
-          <span v-if="sentenceMarks(item) && item.direction === 'vi-en'" class="marked">
+          <span v-if="sentenceMarks(item) && fromVi(item.direction)" class="marked">
             <template v-for="(part, index) in sentenceMarks(item)" :key="index">
               <button v-if="part.on" type="button" class="hit" @click="lookupWord(part.text)">{{ part.text }}</button>
               <span v-else>{{ part.text }}</span>
             </template>
           </span>
           <span v-else>{{ item.translation }}</span>
-          <SpeakButton v-if="item.direction === 'vi-en'" :text="item.translation" />
+          <SpeakButton v-if="fromVi(item.direction)" :text="item.translation" />
         </p>
         <p v-if="item.status === 'ready' && item.kind === 'sentence' && item.vocab?.length" class="roots">
           <span>Từ vựng</span>
@@ -309,7 +316,7 @@ onBeforeUnmount(() => {
         </p>
         <p
           v-if="
-            item.direction === 'vi-en' &&
+            fromVi(item.direction) &&
             item.status === 'ready' &&
             (item.pos || item.ipa)
           "

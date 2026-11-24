@@ -54,20 +54,25 @@ async function refreshHistory() {
   }
 }
 
+function fromVi(direction) {
+  return String(direction || "").startsWith("vi-");
+}
+
 function englishOf(payload) {
-  return payload.direction === "vi-en" ? payload.translation : payload.word;
+  return fromVi(payload.direction) ? payload.translation : payload.word;
 }
 
 function sentenceMarks(item) {
   if (item?.kind !== "sentence") return null;
-  const text = item.direction === "vi-en" ? item.translation : item.word;
+  const text = String(item.direction || "").startsWith("vi-") ? item.translation : item.word;
   const words = (item.vocab || []).map((hit) => hit.en).filter(Boolean);
   if (!text || !words.length) return null;
   return markSentence(text, words);
 }
 
 async function lookupWord(text) {
-  const word = String(text || "").replace(/[^A-Za-z'-]/g, "").trim();
+  // Giu ca chu Latin co dau (tieng Phap).
+  const word = String(text || "").replace(/[^A-Za-zÀ-ÿŒœ'-]/g, "").trim();
   if (!word || pending.value) return;
   notice.value = "";
   pending.value = word;
@@ -326,32 +331,32 @@ onBeforeUnmount(() => {
         <div class="row">
           <div class="stack">
             <p class="term">
-              <template v-if="sentenceMarks(item) && item.direction !== 'vi-en'">
+              <template v-if="sentenceMarks(item) && !fromVi(item.direction)">
                 <template v-for="(part, index) in sentenceMarks(item)" :key="index">
                   <button v-if="part.on" type="button" class="hit" @click="lookupWord(part.text)">{{ part.text }}</button>
                   <span v-else>{{ part.text }}</span>
                 </template>
               </template>
               <template v-else>{{ item.word }}</template>
-              <i v-if="item.direction !== 'vi-en' && englishMeta(item)">{{ englishMeta(item) }}</i>
+              <i v-if="!fromVi(item.direction) && englishMeta(item)">{{ englishMeta(item) }}</i>
             </p>
             <p class="mean">
               <span class="arrow" aria-hidden="true">→</span>
-              <template v-if="sentenceMarks(item) && item.direction === 'vi-en'">
+              <template v-if="sentenceMarks(item) && fromVi(item.direction)">
                 <template v-for="(part, index) in sentenceMarks(item)" :key="index">
                   <button v-if="part.on" type="button" class="hit" @click="lookupWord(part.text)">{{ part.text }}</button>
                   <span v-else>{{ part.text }}</span>
                 </template>
               </template>
               <template v-else>{{ item.translation }}</template>
-              <i v-if="item.direction === 'vi-en' && englishMeta(item)">{{ englishMeta(item) }}</i>
+              <i v-if="fromVi(item.direction) && englishMeta(item)">{{ englishMeta(item) }}</i>
             </p>
             <p v-if="item.kind === 'sentence' && item.vocab?.length" class="roots">
               <span>Từ vựng</span>
               <span v-for="hit in item.vocab" :key="hit.en">{{ hit.en }}<template v-if="hit.pos"> · {{ hit.pos }}</template><template v-if="hit.vi"> · {{ hit.vi }}</template></span>
             </p>
           </div>
-          <SpeakButton :text="item.direction === 'vi-en' ? item.translation : item.word" />
+          <SpeakButton :text="fromVi(item.direction) ? item.translation : item.word" />
         </div>
         <p v-if="saves[item.word]" class="save" :class="{ bad: saves[item.word].status === 'error' }">
           {{ saves[item.word].message }}
