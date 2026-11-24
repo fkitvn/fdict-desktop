@@ -19,8 +19,10 @@ export async function speak(text) {
   speaking.value = value;
   try {
     await invoke("piper_speak", { text: value });
-  } catch {
-    /* Piper không phát được. */
+    return "";
+  } catch (error) {
+    return typeof error === "string" && error.trim() ? error : "Không phát được tiếng.";
+  } finally {
+    if (mine === ticket) speaking.value = "";
   }
-  if (mine === ticket) speaking.value = "";
 }

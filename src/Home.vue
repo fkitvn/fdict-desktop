@@ -85,7 +85,7 @@ async function lookupWord(text) {
   }
 }
 
-function onLookup(payload) {
+async function onLookup(payload) {
   if (!payload?.word) return;
   if (payload.status === "loading") {
     pending.value = payload.word;
@@ -101,7 +101,10 @@ function onLookup(payload) {
     if (payload.quiet && autoSpeak.value && spoken !== payload.word) {
       spoken = payload.word;
       const text = englishOf(payload);
-      if (text) speak(text);
+      if (text) {
+        const err = await speak(text);
+        if (err) notice.value = err;
+      }
     }
     refreshHistory();
     return;
