@@ -48,7 +48,7 @@ function fromVi(direction) {
   return String(direction || "").startsWith("vi-");
 }
 
-function apply(payload) {
+async function apply(payload) {
   if (!payload) return;
   if (!payload.word) {
     notice.value = payload.message || "";
@@ -87,7 +87,10 @@ function apply(payload) {
     previous?.status !== "ready"
   ) {
     const text = fromVi(next.direction) ? next.translation : next.word;
-    if (text) speak(text);
+    if (text) {
+      const err = await speak(text);
+      if (err) notice.value = err;
+    }
   }
 }
 

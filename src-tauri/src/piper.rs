@@ -46,8 +46,11 @@ pub async fn piper_speak(app: AppHandle, text: String) -> Result<(), String> {
     stop_playback();
     let dir = piper_dir(&app)?;
     let exe = ensure_runtime(&dir).await?;
-    // Chon giong theo ngon ngu hoc cua tai khoan (en|fr).
-    let target = crate::vocab::cached_target();
+    // Giong theo ngon ngu hoc. Cache rong luc moi mo app: hoi lai server, ke ca khi nguoi dung chua vao Cai dat.
+    let target = match crate::auth::bearer_token(&app) {
+        Some(token) => crate::vocab::ensure_target(&app, &token).await,
+        None => crate::vocab::cached_target(),
+    };
     let model = ensure_voice(&dir, &target).await?;
     let wav = speak_file(&dir);
     if wav.exists() {
@@ -121,7 +124,8 @@ async fn ensure_voice(dir: &Path, target: &str) -> Result<PathBuf, String> {
 
 async fn download(url: &str) -> Result<Vec<u8>, String> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
+        .timeout(std::time::Duration::from_secs(300))
+        .user_agent("FDict")
         .build()
         .map_err(|_| "Không mở được kết nối mạng.".to_string())?;
     let response = client.get(url).send().await.map_err(|_| "Không tải được giọng Piper.".to_string())?;
@@ -200,7 +204,13 @@ fn run_piper(exe: &Path, model: &Path, wav: &Path, text: &str) -> Result<(), Str
     }
     let output = child.wait_with_output().map_err(|_| "Piper không đọc được từ này.".to_string())?;
     if !output.status.success() || !wav.is_file() {
-        return Err("Piper không đọc được từ này.".into());
+        let detail = String::from_utf8_lossy(&output.stderr);
+        let detail = detail.split_whitespace().collect::<Vec<_>>().join(" ");
+        let detail = detail.chars().take(160).collect::<String>();
+        if detail.is_empty() {
+            return Err("Piper không đọc được từ này.".into());
+        }
+        return Err(format!("Piper không đọc được từ này. {detail}"));
     }
     Ok(())
 }

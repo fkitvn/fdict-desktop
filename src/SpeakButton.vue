@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { speak, speaking } from "./speak.js";
 import { t } from "./ui-text.js";
 
@@ -7,15 +7,18 @@ const props = defineProps({
   text: { type: String, default: "" },
 });
 
+const fail = ref("");
 const playing = computed(() => speaking.value === props.text.trim());
 
-function play() {
-  speak(props.text);
+async function play() {
+  fail.value = "";
+  const err = await speak(props.text);
+  if (err) fail.value = err;
 }
 </script>
 
 <template>
-  <button type="button" class="speak" :class="{ on: playing }" :aria-label="t('speak.label', { text })" @click.stop="play">
+  <button type="button" class="speak" :class="{ on: playing }" :aria-label="t('speak.label', { text })" :title="fail" @click.stop="play">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M11 5 6 9H3v6h3l5 4V5z" />
       <path d="M15.5 8.5a5 5 0 0 1 0 7" />
