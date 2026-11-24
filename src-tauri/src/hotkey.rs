@@ -511,14 +511,9 @@ async fn lookup_server(app: &AppHandle, token: Option<&str>, word: &str) -> Resu
         Some(token),
     )
     .await?;
-    match status.as_u16() {
-        200 => {}
-        400 => return Err("Hãy nhập một từ hoặc một câu ngắn.".into()),
-        401 => return Err("Hãy đăng nhập lại để tra từ.".into()),
-        404 => return Err("Không tìm thấy từ này.".into()),
-        429 => return Err("Tra nhanh quá. Thử lại sau ít phút.".into()),
-        503 => return Err("Máy chủ chưa cấu hình tra từ.".into()),
-        _ => return Err("Máy chủ chưa tra được từ này.".into()),
+    if status.as_u16() != 200 {
+        let code = body.get("error").and_then(|value| value.as_str()).unwrap_or("");
+        return Err(lookup_failure(status.as_u16(), code));
     }
     let text = |key: &str| body.get(key).and_then(|value| value.as_str()).unwrap_or("").trim().to_string();
     // Server tra dir dang {src}-{dst}; "en" luon mang chu ngon ngu dich (L2). Nguon tieng Viet -> dich la L2.
@@ -548,6 +543,19 @@ async fn lookup_server(app: &AppHandle, token: Option<&str>, word: &str) -> Resu
             vocab: read_vocab(&body),
         },
     ))
+}
+
+fn lookup_failure(status: u16, code: &str) -> String {
+    match (status, code) {
+        (400, _) => "Hãy nhập một từ hoặc một câu ngắn.".into(),
+        (401, _) => "Hãy đăng nhập lại để tra từ.".into(),
+        (404, _) => "Không tìm thấy từ này.".into(),
+        (429, _) => "Tra nhanh quá. Thử lại sau ít phút.".into(),
+        (503, "gemini_not_configured") | (503, "") => "Máy chủ chưa cấu hình tra từ.".into(),
+        (_, "lookup_timeout") | (504, _) => "Máy dịch phản hồi quá lâu. Hãy thử lại.".into(),
+        (_, "lookup_busy") => "Máy dịch đang bận. Hãy thử lại sau ít giây.".into(),
+        _ => "Máy chủ chưa tra được từ này.".into(),
+    }
 }
 
 fn read_kind(body: &serde_json::Value) -> String {
