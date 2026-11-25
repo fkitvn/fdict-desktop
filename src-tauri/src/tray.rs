@@ -16,7 +16,11 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
             "sign-out" => {
                 crate::auth::sign_out(app);
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                if !crate::update::install_on_quit(app) {
+                    app.exit(0);
+                }
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {

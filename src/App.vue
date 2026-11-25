@@ -141,7 +141,12 @@ onMounted(async () => {
   await refreshHotkey();
   try {
     stopUpdate = await listen("update", (event) => {
-      if (event.payload?.phase === "installing") updating.value = true;
+      const phase = event.payload?.phase;
+      if (phase === "installing" || phase === "downloading") updating.value = true;
+      if (phase === "pending") {
+        updating.value = false;
+        checkUpdate();
+      }
     });
   } catch {
     stopUpdate = null;
@@ -282,8 +287,8 @@ async function signOut() {
           class="restart"
           type="button"
           :disabled="updating"
-          :aria-label="updating ? t('update.downloading') : t('update.restart')"
-          :title="updating ? t('update.downloading') : t('update.restart')"
+          :aria-label="updating ? t('update.downloading') : update?.pending ? t('update.pendingHint') : t('update.restart')"
+          :title="updating ? t('update.downloading') : update?.pending ? t('update.pendingHint') : t('update.restart')"
           @click="restartToUpgrade"
         >
           <svg

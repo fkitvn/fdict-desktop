@@ -44,9 +44,13 @@ pub fn apply(app: &AppHandle) {
     let _ = set_os(app, wanted);
 }
 
+pub fn launched_at_login() -> bool {
+    std::env::args().any(|arg| arg == "--autostart")
+}
+
 /// When Windows starts the app via the autostart entry, keep it in the tray.
 pub fn hide_if_launched_at_login(app: &AppHandle) {
-    if !std::env::args().any(|arg| arg == "--autostart") {
+    if !launched_at_login() {
         return;
     }
     if let Some(window) = app.get_webview_window("main") {
