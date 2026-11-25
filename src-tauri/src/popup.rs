@@ -45,6 +45,12 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+pub fn is_open(app: &AppHandle) -> bool {
+    app.get_webview_window(LABEL)
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false)
+}
+
 pub fn show(app: &AppHandle) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;

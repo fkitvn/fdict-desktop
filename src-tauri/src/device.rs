@@ -1,6 +1,31 @@
 use serde::Serialize;
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
+
+static BUSY: AtomicBool = AtomicBool::new(false);
+
+pub fn is_busy() -> bool {
+    BUSY.load(Ordering::SeqCst)
+}
+
+/// Hold this while a long device transfer is running so an update waits.
+#[allow(dead_code)]
+pub struct BusyGuard;
+
+impl BusyGuard {
+    #[allow(dead_code)]
+    pub fn enter() -> Self {
+        BUSY.store(true, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        BUSY.store(false, Ordering::SeqCst);
+    }
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

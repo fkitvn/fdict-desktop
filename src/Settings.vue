@@ -79,7 +79,13 @@ async function toggleAutoUpdate() {
     updateMessage.value = typeof error === "string" && error.trim() ? error : t("settings.saveChoiceFail");
     return;
   }
-  if (autoUpdate.value && update.value?.available) installUpdate();
+  if (autoUpdate.value && update.value?.available && !update.value?.pending) {
+    try {
+      update.value = await invoke("update_download");
+    } catch (error) {
+      updateMessage.value = typeof error === "string" && error.trim() ? error : t("settings.versionFail");
+    }
+  }
 }
 async function installUpdate() {
   if (updating.value || !update.value?.available) return;
@@ -288,7 +294,12 @@ onMounted(async () => {
   }
   try {
     stopUpdate = await listen("update", (event) => {
-      if (event.payload?.phase === "installing") updating.value = true;
+      const phase = event.payload?.phase;
+      if (phase === "installing" || phase === "downloading") updating.value = true;
+      if (phase === "pending") {
+        updating.value = false;
+        checkUpdate();
+      }
     });
   } catch {
     stopUpdate = null;
@@ -434,7 +445,9 @@ onBeforeUnmount(() => {
     <article class="setting">
       <div>
         <h2>{{ t("settings.version") }}</h2>
+        <p>{{ t("settings.autoUpdateHint") }}</p>
         <p v-if="updating">{{ t("update.downloadingDots") }}</p>
+        <p v-else-if="update?.pending">{{ update.current }} → {{ update.latest }}. {{ t("update.pending") }}</p>
         <p v-else-if="update?.available">{{ update.current }} → {{ update.latest }}</p>
         <p v-else-if="update">{{ update.current }}</p>
         <p v-else-if="updateMessage">{{ updateMessage }}</p>

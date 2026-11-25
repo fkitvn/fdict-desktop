@@ -22,12 +22,19 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            if update::apply_pending_on_launch(app.handle()) {
+                return Ok(());
+            }
             tray::install(app)?;
             popup::install(app)?;
             hotkey::install(app)?;
             update::start_auto(app.handle());
             crate::autostart::apply(app.handle());
-            crate::autostart::hide_if_launched_at_login(app.handle());
+            if crate::autostart::launched_at_login() {
+                crate::autostart::hide_if_launched_at_login(app.handle());
+            } else {
+                crate::tray::show_main(app.handle());
+            }
             crate::auth::start_presence(app.handle());
             Ok(())
         })
@@ -60,6 +67,7 @@ pub fn run() {
             vocab::settings_set_target,
             env::env_snapshot,
             update::update_check,
+            update::update_download,
             update::update_install,
             update::update_auto_snapshot,
             update::update_auto_set,
