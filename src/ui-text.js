@@ -175,6 +175,8 @@ const vi = {
   "devices.openFail": "Không mở được trang thiết bị.",
   "devices.pitch": "Thiết bị học từ vựng cầm tay. Màn hình màu, bốn phím vật lý và sáu chế độ luyện tập, không thông báo làm xao nhãng.",
   "devices.buy": "Mua thiết bị",
+  "devices.modelName": "FDict",
+  "devices.battery": "Pin: {percent}%",
 
   "dir.viEn": "Việt → Anh",
   "dir.enVi": "Anh → Việt",
@@ -364,6 +366,8 @@ const en = {
   "devices.openFail": "Could not open the device page.",
   "devices.pitch": "A handheld vocabulary device. Color screen, four physical keys, and six practice modes, with no distracting notifications.",
   "devices.buy": "Buy the device",
+  "devices.modelName": "FDict",
+  "devices.battery": "Battery: {percent}%",
 
   "dir.viEn": "Vietnamese → English",
   "dir.enVi": "English → Vietnamese",
@@ -553,6 +557,8 @@ const fr = {
   "devices.openFail": "Impossible d'ouvrir la page de l'appareil.",
   "devices.pitch": "Un appareil portable pour apprendre le vocabulaire. Écran couleur, quatre touches physiques et six modes d'entraînement, sans notification qui distrait.",
   "devices.buy": "Acheter l'appareil",
+  "devices.modelName": "FDict",
+  "devices.battery": "Batterie : {percent} %",
 
   "dir.viEn": "Vietnamien → Anglais",
   "dir.enVi": "Anglais → Vietnamien",

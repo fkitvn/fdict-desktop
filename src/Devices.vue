@@ -44,6 +44,19 @@ async function openShop() {
   }
 }
 
+function displayName(name) {
+  const trimmed = typeof name === "string" ? name.trim() : "";
+  if (!trimmed || trimmed === "FDict One") return t("devices.modelName");
+  return trimmed;
+}
+
+function batteryLabel(value) {
+  if (value == null || value === "") return "";
+  const percent = Number(value);
+  if (!Number.isFinite(percent)) return "";
+  return t("devices.battery", { percent });
+}
+
 onMounted(load);
 </script>
 
@@ -55,10 +68,10 @@ onMounted(load);
     <ul v-else-if="items.length">
       <li v-for="item in items" :key="item.id">
         <div>
-          <p class="name">{{ item.name }}</p>
+          <p class="name">{{ displayName(item.name) }}</p>
           <p class="meta">{{ item.version || t("devices.unknownVersion") }} · {{ seenLabel(item.seen) }}</p>
         </div>
-        <span v-if="item.battery != null">{{ item.battery }}%</span>
+        <span v-if="batteryLabel(item.battery)">{{ batteryLabel(item.battery) }}</span>
       </li>
     </ul>
     <p v-if="message" class="note">{{ message }}</p>
@@ -66,7 +79,7 @@ onMounted(load);
     <article class="offer">
       <DeviceModel compact />
       <div class="pitch">
-        <h2>FDict One</h2>
+        <h2>{{ t("devices.modelName") }}</h2>
         <p>{{ t("devices.pitch") }}</p>
         <button class="primary" type="button" @click="openShop">{{ t("devices.buy") }}</button>
       </div>
