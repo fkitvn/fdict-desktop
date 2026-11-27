@@ -60,7 +60,7 @@ fn profile(name: &str) -> Profile {
     // Moi API (dang nhap, tu vung, may, cap nhat) deu di fdict-web-app.
     // Lab: tunnel cua web-app (xem README.md).
     if name == "lab" {
-        let dict = "https://fdict-dev.joinnow.vn".to_string();
+        let dict = "https://fdict-dev.fkit.vn".to_string();
         return Profile {
             name: name.into(),
             auth: dict.clone(),
